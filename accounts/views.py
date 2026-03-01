@@ -31,9 +31,11 @@ from django.db import transaction
 from rest_framework.decorators import action
 
 google_client_id = settings.SOCIALACCOUNT_PROVIDERS['google']['APP'].get('client_id')
-fb_app_id = settings.SOCIALACCOUNT_PROVIDERS['facebook']['APP'].get('client_id')
-fb_app_secret = settings.SOCIALACCOUNT_PROVIDERS['facebook']['APP'].get('secret')
+providers = getattr(settings, "SOCIALACCOUNT_PROVIDERS", {})
+facebook_config = providers.get("facebook", {}).get("APP", {})
 
+fb_app_id = facebook_config.get("client_id")
+fb_app_secret = facebook_config.get("secret")
 
 def _normalize_target(s: str) -> str:
     return s.strip().lower()
