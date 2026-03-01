@@ -1,0 +1,28 @@
+databases:
+  - name: cultural-feed-db
+    databaseName: cultural_feed
+    user: cultural_feed_user
+    plan: free
+
+services:
+  - type: web
+    name: cultural-feed-backend
+    env: python
+    buildCommand: bash build.sh
+    startCommand: gunicorn config.wsgi:application
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cultural-feed-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: ALLOWED_HOSTS
+        value: "*"
+      # Add CORS and CSRF frontend URLs when testing in production
+      # - key: CORS_ALLOWED_ORIGINS
+      #   value: "https://your-frontend.com"
+      # - key: CSRF_TRUSTED_ORIGINS
+      #   value: "https://your-frontend.com"

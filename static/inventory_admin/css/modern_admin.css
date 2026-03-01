@@ -1,0 +1,52 @@
+/* Modern Django Inventory Admin */
+body, .module {
+    font-family: 'Inter', sans-serif !important;
+}
+
+.drag-drop-zone {
+    width: 100%;
+    padding: 30px;
+    border: 2px dashed #4a90e2;
+    border-radius: 12px;
+    background: #f9fbff;
+    text-align: center;
+    font-size: 15px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.drag-drop-zone:hover {
+    background: #eef5ff;
+    border-color: #2a7de1;
+}
+
+.gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 150px);
+    gap: 15px;
+    padding-top: 20px;
+}
+
+.gallery-item {
+    position: relative;
+}
+
+.gallery-item img {
+    width: 150px;
+    height: 150px;
+    object-fit: cover;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.gallery-delete {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    background: #ff4b4b;
+    color: white;
+    padding: 4px 7px;
+    border-radius: 50%;
+    font-size: 12px;
+    cursor: pointer;
+}

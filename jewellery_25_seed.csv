@@ -1,0 +1,26 @@
+category,product_name,slug,commodity,commodity_variant,unit,unit_price,cgst_percent,sgst_percent,wastage_percent,ratti_multiplier,hallmark_charges,delivery_charges,packaging_charges,effective_date,sku_code,barcode,weight,making_charge,sell_by_fixed_price,price_calculated
+Rings,22K Gold Plain Wedding Ring,22k-gold-plain-wedding-ring,gold,22k,gram,6200.50,1.5,1.5,1.0,0,25.00,50.00,20.00,2025-12-01,RNG-22K-3G,8901000000001,3.000,150.00,False,19600.64
+Rings,22K Gold Designer Ring,22k-gold-designer-ring,gold,22k,gram,6200.50,1.5,1.5,1.0,0,30.00,60.00,25.00,2025-12-01,RNG-22K-5G,8901000000002,5.000,220.00,False,32593.50
+Necklaces,24K Gold Chain 18-inch,24k-gold-chain-18,gold,24k,gram,6800.00,1.5,1.5,1.2,0,40.00,100.00,30.00,2025-12-01,NKP-24K-25G,8901000000003,25.000,1200.00,False,178607.20
+Necklaces,22K Gold Necklace with Pendant,22k-gold-necklace-pendant,gold,22k,gram,6200.50,1.5,1.5,1.0,0,35.00,90.00,30.00,2025-12-01,NKP-22K-30G,8901000000004,30.000,1500.00,False,195211.40
+Bangles,22K Gold Bangle Floral,22k-gold-bangle-floral,gold,22k,gram,6200.50,1.5,1.5,1.5,0,28.00,70.00,20.00,2025-12-01,BNG-22K-20G,8901000000005,20.000,900.00,False,130691.25
+Bangles,24K Gold Kada,24k-gold-kada,gold,24k,gram,6800.00,1.5,1.5,1.2,0,45.00,110.00,35.00,2025-12-01,BNG-24K-35G,8901000000006,35.000,1800.00,False,250125.68
+Pendants,Gold Heart Pendant 10g,gold-heart-pendant-10g,gold,22k,gram,6200.50,1.5,1.5,1.0,0,20.00,40.00,15.00,2025-12-01,PND-22K-10G,8901000000007,10.000,400.00,False,64990.80
+Chains,Silver Chain 10g,silver-chain-10g,silver,silver999,gram,75.50,1.5,1.5,0.5,0,5.00,20.00,10.00,2025-12-01,CHN-SIL-10G,8901000000008,10.000,100.00,False,919.54
+Bracelets,Gold Bracelet 15g,gold-bracelet-15g,gold,22k,gram,6200.50,1.5,1.5,1.0,0,22.00,60.00,20.00,2025-12-01,BRC-22K-15G,8901000000009,15.000,700.00,False,97578.70
+Earrings,Diamond Studs VVS1 0.5ct,diamond-studs-vvs1-0-5,diamond,vvs1,carat,450000.00,1.5,1.5,0,0.2,0.00,500.00,100.00,2025-12-01,EAR-DIA-0.5-VVS1,8901000000010,1.000,800.00,False,94100.00
+Rings,Diamond Solitaire Ring VS1 0.75ct,diamond-solitaire-vs1-0-75,diamond,vs1,carat,220000.00,1.5,1.5,0,0.2,0.00,400.00,80.00,2025-12-01,RNG-DIA-0.75-VS1,8901000000011,1.000,1200.00,False,47000.00
+Necklaces,Diamond Pendant 1ct VVS2,diamond-pendant-1ct-vvs2,diamond,vvs2,carat,420000.00,1.5,1.5,0,0.2,0.00,600.00,120.00,2025-12-01,PND-DIA-1CT-VVS2,8901000000012,1.000,1500.00,False,88740.00
+Rings,Diamond Band 2ct VS2,diamond-band-2ct-vs2,diamond,vs2,carat,210000.00,1.5,1.5,0,0.2,0.00,700.00,150.00,2025-12-01,RNG-DIA-2CT-VS2,8901000000013,1.000,2500.00,False,46610.00
+Earrings,Diamond Hoop Earrings 0.8ct,diamond-hoop-0-8ct,diamond,vvs1,carat,450000.00,1.5,1.5,0,0.2,0.00,450.00,90.00,2025-12-01,EAR-DIA-0.8,8901000000014,1.000,1000.00,False,94240.00
+Chains,Gold Bracelet 8g,gold-bracelet-8g,gold,22k,gram,6200.50,1.5,1.5,1.0,0,18.00,40.00,15.00,2025-12-01,BRC-22K-8G,8901000000015,8.000,360.00,False,52046.84
+Pendants,Gold Locket 6g,gold-locket-6g,gold,22k,gram,6200.50,1.5,1.5,1.0,0,15.00,30.00,10.00,2025-12-01,PND-22K-6G,8901000000016,6.000,250.00,False,39014.78
+Bangles,Antique Gold Bangle 22g,antique-gold-bangle-22g,gold,22k,gram,6200.50,1.5,1.5,1.3,0,32.00,80.00,25.00,2025-12-01,BNG-22K-22G-ANT,8901000000017,22.000,1100.00,False,143599.87
+Rings,Gold Cocktail Ring 12g,gold-cocktail-ring-12g,gold,18k,gram,4700.00,1.5,1.5,1.0,0,20.00,45.00,15.00,2025-12-01,RNG-18K-12G,8901000000018,12.000,650.00,False,59422.42
+Necklaces,Gold Bridal Set 60g,gold-bridal-set-60g,gold,22k,gram,6200.50,1.5,1.5,1.5,0,120.00,300.00,80.00,2025-12-01,SET-BRD-60G,8901000000019,60.000,6000.00,False,395618.76
+Anklets,Gold Anklet 7g,gold-anklet-7g,gold,22k,gram,6200.50,1.5,1.5,1.0,0,12.00,30.00,10.00,2025-12-01,ANK-22K-7G,8901000000020,7.000,220.00,False,45431.26
+Nose Pins,Gold Nose Pin 1g,gold-nose-pin-1g,gold,22k,gram,6200.50,1.5,1.5,0.5,0,5.00,10.00,5.00,2025-12-01,NOSE-22K-1G,8901000000021,1.000,60.00,False,6500.25
+Chains,Gold Figaro Chain 18g,gold-figaro-18g,gold,22k,gram,6200.50,1.5,1.5,1.0,0,40.00,90.00,30.00,2025-12-01,CHN-22K-FIG-18G,8901000000022,18.000,900.00,False,117193.84
+Pendants,Gold Drop Pendant 4g,gold-drop-pendant-4g,gold,22k,gram,6200.50,1.5,1.5,1.0,0,10.00,25.00,10.00,2025-12-01,PND-22K-4G,8901000000023,4.000,180.00,False,26031.92
+Rings,Silver Ring 5g,silver-ring-5g,silver,silver999,gram,75.50,1.5,1.5,0.5,0,0.00,15.00,5.00,2025-12-01,RNG-SIL-5G,8901000000024,5.000,80.00,False,493.17
+Earrings,Antique Gold Earrings 9g,antique-gold-earrings-9g,gold,22k,gram,6200.50,1.5,1.5,1.1,0,16.00,35.00,12.00,2025-12-01,EAR-22K-9G-ANT,8901000000025,9.000,300.00,False,58482.90

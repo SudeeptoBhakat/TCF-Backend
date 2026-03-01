@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual Environment
+venv/
+env/
+.venv/
+
+# Environment files
+.env
+
+# Django
+*.log
+db.sqlite3
+media/
+staticfiles/
+
+# Logs
+logs/
+
+# VS Code
+.vscode/
+
+# Mac
+.DS_Store
+
+# Build
+*.egg-info/
+dist/
+build/
+
+# Node (if any)
+node_modules/

@@ -1,0 +1,6 @@
+/* small styles to make the multi-upload input stand out */
+div.field-upload_files input[type="file"] {
+  border: 1px dashed #bbb;
+  padding: 6px;
+  background: #fff;
+}
