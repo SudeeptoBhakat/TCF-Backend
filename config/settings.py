@@ -222,13 +222,13 @@ SIMPLE_JWT = {
 CORS_ALLOW_CREDENTIALS : True
 
 CORS_ALLOWED_ORIGINS = [
-    "https://frontend-rouge-ten-22.vercel.app/",
-    "http://localhost:5173/"
+    "https://frontend-rouge-ten-22.vercel.app",
+    "http://localhost:5173"
 ]
 
 CSRF_TRUSTED_ORIGINS = [
-    "https://frontend-rouge-ten-22.vercel.app/",
-    "http://localhost:5173/"
+    "https://frontend-rouge-ten-22.vercel.app",
+    "http://localhost:5173"
 ]
 
 AUTH_PASSWORD_VALIDATORS = [
