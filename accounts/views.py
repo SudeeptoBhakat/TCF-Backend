@@ -108,7 +108,7 @@ class GoogleLoginAPIView(APIView):
             key="refresh_token",
             value=refresh_token,
             httponly=True,
-            secure=False,      # set True in production (HTTPS)
+            secure=True,      # set True in production (HTTPS)
             samesite="Lax",
             max_age=cookie_max_age,
         )
@@ -400,19 +400,19 @@ class RegisterVerifyOTPAPIView(APIView):
             key='access_token',
             value=access,
             httponly=True,
-            secure=False,  # change to True in production
-            samesite='Lax',
+            secure=True,
+            samesite='None',
             max_age=60 * 15,
         )
+        
         res.set_cookie(
             key='refresh_token',
             value=refresh,
             httponly=True,
-            secure=False,
-            samesite='Lax',
+            secure=True,
+            samesite='None',
             max_age=60 * 60 * 24 * 7,
         )
-
         return res
 
 
@@ -449,18 +449,19 @@ class LoginAPIView(APIView):
             key='access_token',
             value=access,
             httponly=True,
-            samesite='Lax',
-            secure=False,
-            max_age=60 * 15
+            secure=True,
+            samesite='None',
+            max_age=60 * 15,
         )
+        
         res.set_cookie(
             key='refresh_token',
             value=refresh,
             httponly=True,
-            samesite='Lax',
-            secure=False,
-            max_age=60 * 60 * 24 * 7
-        )
+            secure=True,
+            samesite='None',
+            max_age=60 * 60 * 24 * 7,
+        )        
         return res
 
 
