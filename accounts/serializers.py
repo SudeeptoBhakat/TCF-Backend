@@ -3,6 +3,7 @@ from rest_framework import serializers
 from .models import User, Cart, CartItem, Wishlist, ShippingAddress, ProductReview
 from inventory.models import ProductSKU, CommodityRate
 from inventory.serializers import ProductSKUSerializer, CommodityRateSerializer
+from orders.utils import calculate_sku_price
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -60,12 +61,13 @@ class CartItemSerializer(serializers.ModelSerializer):
     commodity_rate = serializers.SerializerMethodField()   # NEW FIELD
     product_id = serializers.SerializerMethodField()
     product_slug = serializers.SerializerMethodField()
+    pricing_details = serializers.SerializerMethodField()
 
     class Meta:
         model = CartItem
         fields = [
             'id', 'sku', 'sku_id', 'quantity',
-            'price_snapshot', 'subtotal', 'commodity_rate', 'product_id', 'product_slug'
+            'price_snapshot', 'subtotal', 'commodity_rate', 'product_id', 'product_slug', 'pricing_details'
         ]
         read_only_fields = ['price_snapshot']
     
@@ -73,6 +75,19 @@ class CartItemSerializer(serializers.ModelSerializer):
         if obj.sku and obj.sku.product:
             return str(obj.sku.product.id)
         return None
+
+    def get_pricing_details(self, obj):
+        if not obj.sku:
+            return None
+        try:
+            _, tax_details = calculate_sku_price(obj.sku)
+            return tax_details
+        except Exception:
+            return {
+                "method": "fallback",
+                "unit_price": str(obj.sku.price),
+                "discount_price": str(obj.sku.discount_price) if obj.sku.discount_price else None
+            }
 
     def get_product_slug(self, obj):
         if obj.sku and obj.sku.product:

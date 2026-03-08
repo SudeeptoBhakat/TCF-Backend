@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from .models import ProductCategory, Product, ProductMedia, ProductSKU, SKUAttributeOption, ProductAttribute, ProductAttributeOption, CommodityVariant, CommodityRate
+from orders.utils import calculate_sku_price
 
 class ProductCategoryListSerilizer(serializers.ModelSerializer):
     children = serializers.SerializerMethodField()
@@ -84,6 +85,7 @@ class ProductSKUSerializer(serializers.ModelSerializer):
     commodity = CommodityVariantSerializer(source="commodity_variant")
     product_name = serializers.CharField(source='product.name', read_only=True)
     image = serializers.SerializerMethodField()
+    pricing_details = serializers.SerializerMethodField()
     
     class Meta:
         model = ProductSKU
@@ -105,6 +107,7 @@ class ProductSKUSerializer(serializers.ModelSerializer):
             "commodity",
             "product_name",
             "image",
+            "pricing_details",
         ]
 
     def get_image(self, obj):
@@ -119,6 +122,18 @@ class ProductSKUSerializer(serializers.ModelSerializer):
         if product_media and product_media.media_file:
             return product_media.media_file.url
         return None
+
+    def get_pricing_details(self, obj):
+        try:
+            _, tax_details = calculate_sku_price(obj)
+            return tax_details
+        except Exception:
+            # Fallback to base model price fields if calculation fails
+            return {
+                "method": "fallback",
+                "unit_price": str(obj.price),
+                "discount_price": str(obj.discount_price) if obj.discount_price else None
+            }
 
 
 class ProductListSerializer(serializers.ModelSerializer):
