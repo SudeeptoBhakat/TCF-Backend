@@ -59,7 +59,8 @@ def calculate_sku_price(sku):
         sgst = (subtotal * Decimal(rate.sgst_percent or 0)) / Decimal("100")
 
         hallmark = Decimal(sku.hallmark_charges or 0)
-        delivery = 0 # Decimal(sku.delivery_charges or 0)
+        delivery = Decimal("0.00") # Decimal(sku.delivery_charges or 0)
+
         packaging = Decimal(sku.packaging_charges or 0)
 
         unit_price = subtotal + cgst + sgst + hallmark + delivery + packaging
@@ -88,7 +89,8 @@ def calculate_sku_price(sku):
         gst_value = (stone_value * gst_total_percent) / Decimal("100")
 
         hallmark = Decimal(sku.hallmark_charges or 0)
-        delivery = 0 # Decimal(sku.delivery_charges or 0)
+        delivery = Decimal("0.00") # Decimal(sku.delivery_charges or 0)
+
         packaging = Decimal(sku.packaging_charges or 0)
 
         unit_price = stone_value + gst_value + hallmark + delivery + packaging
