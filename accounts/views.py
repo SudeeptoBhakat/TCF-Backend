@@ -31,9 +31,11 @@ from django.db import transaction
 from rest_framework.decorators import action
 
 google_client_id = settings.SOCIALACCOUNT_PROVIDERS['google']['APP'].get('client_id')
-fb_app_id = settings.SOCIALACCOUNT_PROVIDERS['facebook']['APP'].get('client_id')
-fb_app_secret = settings.SOCIALACCOUNT_PROVIDERS['facebook']['APP'].get('secret')
+providers = getattr(settings, "SOCIALACCOUNT_PROVIDERS", {})
+facebook_config = providers.get("facebook", {}).get("APP", {})
 
+fb_app_id = facebook_config.get("client_id")
+fb_app_secret = facebook_config.get("secret")
 
 def _normalize_target(s: str) -> str:
     return s.strip().lower()
@@ -106,7 +108,7 @@ class GoogleLoginAPIView(APIView):
             key="refresh_token",
             value=refresh_token,
             httponly=True,
-            secure=False,      # set True in production (HTTPS)
+            secure=True,      # set True in production (HTTPS)
             samesite="Lax",
             max_age=cookie_max_age,
         )
@@ -398,19 +400,19 @@ class RegisterVerifyOTPAPIView(APIView):
             key='access_token',
             value=access,
             httponly=True,
-            secure=False,  # change to True in production
-            samesite='Lax',
+            secure=True,
+            samesite='None',
             max_age=60 * 15,
         )
+        
         res.set_cookie(
             key='refresh_token',
             value=refresh,
             httponly=True,
-            secure=False,
-            samesite='Lax',
+            secure=True,
+            samesite='None',
             max_age=60 * 60 * 24 * 7,
         )
-
         return res
 
 
@@ -447,18 +449,19 @@ class LoginAPIView(APIView):
             key='access_token',
             value=access,
             httponly=True,
-            samesite='Lax',
-            secure=False,
-            max_age=60 * 15
+            secure=True,
+            samesite='None',
+            max_age=60 * 15,
         )
+        
         res.set_cookie(
             key='refresh_token',
             value=refresh,
             httponly=True,
-            samesite='Lax',
-            secure=False,
-            max_age=60 * 60 * 24 * 7
-        )
+            secure=True,
+            samesite='None',
+            max_age=60 * 60 * 24 * 7,
+        )        
         return res
 
 

@@ -60,6 +60,10 @@ def calculate_sku_price(sku):
 
         hallmark = Decimal(sku.hallmark_charges or 0)
         delivery = Decimal("0.00") # Decimal(sku.delivery_charges or 0)
+<<<<<<< HEAD
+=======
+
+>>>>>>> 8aa79050347c9e7ab2a962e3cc6d25f4dfeb45e2
         packaging = Decimal(sku.packaging_charges or 0)
 
         unit_price = subtotal + cgst + sgst + hallmark + delivery + packaging
@@ -89,6 +93,10 @@ def calculate_sku_price(sku):
 
         hallmark = Decimal(sku.hallmark_charges or 0)
         delivery = Decimal("0.00") # Decimal(sku.delivery_charges or 0)
+<<<<<<< HEAD
+=======
+
+>>>>>>> 8aa79050347c9e7ab2a962e3cc6d25f4dfeb45e2
         packaging = Decimal(sku.packaging_charges or 0)
 
         unit_price = stone_value + gst_value + hallmark + delivery + packaging

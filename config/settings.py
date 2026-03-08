@@ -32,9 +32,13 @@ CORS_ALLOWED_ORIGINS = [
 
 CORS_ALLOW_CREDENTIALS = True
 
-SESSION_COOKIE_SECURE = not DEBUG
-CSRF_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
 SECURE_SSL_REDIRECT = not DEBUG
+
+# Required for cross-site cookies
+SESSION_COOKIE_SAMESITE = "None"
+CSRF_COOKIE_SAMESITE = "None"
 
 # ==============================
 # APPLICATIONS
@@ -66,7 +70,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
-
+    "allauth.account.middleware.AccountMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -210,12 +214,31 @@ SIMPLE_JWT = {
     "AUTH_HEADER_TYPES": ("Bearer",),
     "AUTH_COOKIE": None,  # Don't use cookies for access token
     "AUTH_COOKIE_REFRESH": "refresh_token",  # Use cookie for refresh token
+<<<<<<< HEAD
 }
 
 
 
 
 
+=======
+    "AUTH_COOKIE_SECURE": True,
+    "AUTH_COOKIE_HTTP_ONLY": True,
+    "AUTH_COOKIE_SAMESITE": "None",
+}
+
+CORS_ALLOW_CREDENTIALS : True
+
+CORS_ALLOWED_ORIGINS = [
+    "https://frontend-rouge-ten-22.vercel.app",
+    "http://localhost:5173"
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://frontend-rouge-ten-22.vercel.app",
+    "http://localhost:5173"
+]
+>>>>>>> 8aa79050347c9e7ab2a962e3cc6d25f4dfeb45e2
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -263,4 +286,8 @@ LOGGING = {
             "propagate": True,
         },
     },
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 8aa79050347c9e7ab2a962e3cc6d25f4dfeb45e2
