@@ -433,7 +433,7 @@ class ProductSKU(TimestampedModel):
                     gst_total = cgst_value + sgst_value
 
                     # Additional charges
-                    hallmark = 53 * Decimal(self.hallmark_charges or 0)
+                    hallmark = Decimal(self.hallmark_charges or 0)
                     delivery = 0 # Decimal(self.delivery_charges or 0)
                     packaging = Decimal(self.packaging_charges or 0)
 
