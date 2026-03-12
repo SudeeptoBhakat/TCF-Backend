@@ -2,7 +2,7 @@ from django.utils.text import slugify
 from django.utils import timezone
 from django.utils.html import mark_safe
 from django.core.validators import MinValueValidator
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from django.dispatch import receiver
 from django.db.models.signals import post_save
 from django.db.models import Q
@@ -11,10 +11,12 @@ from django.db import transaction
 import uuid
 import logging
 
+DEC2 = Decimal("0.01")
 from orders.utils import calculate_sku_price, get_latest_rate_for_variant
 
 logger = logging.getLogger(__name__)
-
+def quantize_money(value: Decimal) -> Decimal:
+    return value.quantize(DEC2, rounding=ROUND_HALF_UP)
 
 class TimestampedModel(models.Model):
     """
@@ -370,62 +372,162 @@ class ProductSKU(TimestampedModel):
 
     def __str__(self):
         return f"{self.sku_code} - {self.product.name}"
+    
 
-    def recalculate_price_from_rate(self, rate=None):
+    def recalculate_price_from_rate(self, rate: CommodityRate):
         """
-        Recalculate SKU price using the central pricing engine.
-        Works for both METAL and STONE.
+        Recalculate SKU price based on commodity rate.
+        Supports both metal and stone pricing logic.
         """
 
         try:
 
-            # Skip if fixed price SKU
+            # ==========================================================
+            # 1 VALIDATION
+            # ==========================================================
+
             if self.sell_by_fixed_price:
-                logger.debug(f"SKU {self.sku_code}: Fixed price enabled. Skipping recalculation.")
+                logger.info(f"SKU {self.sku_code} uses fixed price. Skipping calculation.")
                 return
 
             if not self.commodity_variant:
-                raise ValueError(f"SKU {self.sku_code}: commodity_variant missing")
+                raise ValueError(f"{self.sku_code} has no commodity_variant")
 
-            if not self.weight or self.weight <= 0:
-                raise ValueError(f"SKU {self.sku_code}: invalid weight")
-
-            # If rate not passed → fetch latest
-            if rate is None:
-                rate = get_latest_rate_for_variant(self.commodity_variant)
+            if not self.weight:
+                raise ValueError(f"{self.sku_code} weight missing")
 
             if not rate:
-                raise ValueError(f"No CommodityRate found for SKU {self.sku_code}")
+                raise ValueError(f"{self.sku_code} rate missing")
 
-            # ===============================
-            # CORE PRICE CALCULATION
-            # ===============================
+            commodity_type = self.commodity_variant.commodity.category
 
-            final_price, breakdown = calculate_sku_price(self)
+            weight = Decimal(self.weight or 0)
+            discount_percent = Decimal(self.discount_percent or 0)
+
+            hallmark = Decimal(self.hallmark_charges or 0)
+            packaging = Decimal(self.packaging_charges or 0)
+            delivery = Decimal("0")
+
+            cgst_percent = Decimal(rate.cgst_percent or Decimal("1.5"))
+            sgst_percent = Decimal(rate.sgst_percent or Decimal("1.5"))
+
+            metal_value = Decimal("0")
+            stone_value = Decimal("0")
+            wastage = Decimal("0")
+            making_charge = Decimal(self.making_charge or 0)
+
+            subtotal = Decimal("0")
+            cgst = Decimal("0")
+            sgst = Decimal("0")
+
+            # ==========================================================
+            # 2 METAL CALCULATION
+            # ==========================================================
+
+            if commodity_type == "metal":
+
+                gold_rate = Decimal(rate.unit_price)
+
+                metal_value = gold_rate * weight
+
+                wastage_percent = Decimal(rate.wastage_percent or 0)
+
+                wastage = (metal_value * wastage_percent) / Decimal("100")
+
+                subtotal = metal_value + wastage + making_charge
+
+                cgst = (subtotal * cgst_percent) / Decimal("100")
+                sgst = (subtotal * sgst_percent) / Decimal("100")
+
+            # ==========================================================
+            # 3 STONE CALCULATION
+            # ==========================================================
+
+            else:
+
+                ratti_multiplier = Decimal(rate.ratti_multiplier or 0)
+
+                carat_weight = weight * ratti_multiplier
+
+                stone_value = carat_weight * Decimal(rate.unit_price)
+
+                subtotal = stone_value
+
+                cgst = (subtotal * cgst_percent) / Decimal("100")
+                sgst = (subtotal * sgst_percent) / Decimal("100")
+
+            # ==========================================================
+            # 4 EXTRAS
+            # ==========================================================
+
+            extras = hallmark + packaging + delivery
+
+            # ==========================================================
+            # 5 BASE PRICE
+            # ==========================================================
+
+            base_price = subtotal + cgst + sgst + extras
+
+            # ==========================================================
+            # 6 DISCOUNT
+            # ==========================================================
+
+            discount_amount = (base_price * discount_percent) / Decimal("100")
+
+            final_price = base_price - discount_amount
+
+            final_price = quantize_money(final_price)
+
+            # ==========================================================
+            # 7 SAVE PRICE
+            # ==========================================================
+
+            self.price = final_price
+
+            self.save(update_fields=["price", "updated_at"])
+
+            # ==========================================================
+            # 8 LOGGING
+            # ==========================================================
 
             logger.info(
-                f"[PRICE ENGINE] SKU {self.sku_code} → Final Price ₹{final_price}"
+                f"""
+    PRICE CALCULATION SUCCESS
+
+    SKU : {self.sku_code}
+    TYPE : {commodity_type}
+
+    RATE : {rate.unit_price}
+    WEIGHT : {weight}
+
+    METAL VALUE : {metal_value}
+    STONE VALUE : {stone_value}
+
+    WASTAGE : {wastage}
+    MAKING : {making_charge}
+
+    SUBTOTAL : {subtotal}
+
+    CGST : {cgst}
+    SGST : {sgst}
+
+    HALLMARK : {hallmark}
+    PACKAGING : {packaging}
+    DELIVERY : {delivery}
+
+    BASE PRICE : {base_price}
+
+    DISCOUNT % : {discount_percent}
+    DISCOUNT AMOUNT : {discount_amount}
+
+    FINAL PRICE : {final_price}
+    """
             )
-
-            # ===============================
-            # SAVE PRICE SAFELY
-            # ===============================
-
-            with transaction.atomic():
-
-                self.price = final_price
-                self.save(update_fields=["price", "updated_at"])
-
-            logger.info(
-                f"✓ SKU {self.sku_code} price updated successfully → ₹{self.price}"
-            )
-
-            return breakdown
 
         except Exception as e:
 
             logger.error(
-                f"✗ Price recalculation failed for SKU {self.sku_code}: {str(e)}",
+                f"Price calculation failed for SKU {self.sku_code}: {str(e)}",
                 exc_info=True
             )
 
