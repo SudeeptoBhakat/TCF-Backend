@@ -310,7 +310,7 @@ def update_sku_prices_after_rate_change(sender, instance, created, **kwargs):
         updated_skus.append(sku)
 
     # prevent 1000 queries → turn into 1 query
-    ProductSKU.objects.bulk_update(updated_skus, ['price', 'discount_price', 'updated_at'])
+    ProductSKU.objects.bulk_update(updated_skus, ['price', 'updated_at'])
 
 
 
@@ -344,7 +344,7 @@ class ProductSKU(TimestampedModel):
     hallmark_charges = models.DecimalField(max_digits=12, decimal_places=2, default=0, null=True, blank=True)
 
     price = models.DecimalField(max_digits=12, decimal_places=2)
-    discount_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
 
     sell_by_fixed_price = models.BooleanField(default=False)
     fixed_price = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)

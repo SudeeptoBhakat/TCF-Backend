@@ -169,7 +169,7 @@ class ProductAttributeOptionAdmin(admin.ModelAdmin):
 class ProductSKUAdmin(admin.ModelAdmin):
     list_display = (
         'sku_code', 'product', 'commodity_variant',
-        'price', 'discount_price', 'packaging_charges', 'hallmark_charges', 'stock_qty',
+        'price', 'discount_percent', 'packaging_charges', 'hallmark_charges', 'stock_qty',
         'sell_by_fixed_price', 'is_active'
     )
 
@@ -204,7 +204,7 @@ class ProductSKUAdmin(admin.ModelAdmin):
                 "weight",
                 "making_charge",
                 "price",
-                "discount_price",
+                "discount_percent",
                 'packaging_charges',
                 'hallmark_charges',
             ),

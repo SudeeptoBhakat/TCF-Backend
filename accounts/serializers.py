@@ -86,7 +86,7 @@ class CartItemSerializer(serializers.ModelSerializer):
             return {
                 "method": "fallback",
                 "unit_price": str(obj.sku.price),
-                "discount_price": str(obj.sku.discount_price) if obj.sku.discount_price else None
+                "discount_percent": str(obj.sku.discount_percent) if obj.sku.discount_percent is not None else "0"
             }
 
     def get_product_slug(self, obj):

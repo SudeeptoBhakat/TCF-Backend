@@ -96,7 +96,7 @@ class ProductSKUSerializer(serializers.ModelSerializer):
             "weight",
             "making_charge",
             "price",
-            "discount_price",
+            "discount_percent",
             "sell_by_fixed_price",
             "fixed_price",
             "stock_qty",
@@ -132,7 +132,7 @@ class ProductSKUSerializer(serializers.ModelSerializer):
             return {
                 "method": "fallback",
                 "unit_price": str(obj.price),
-                "discount_price": str(obj.discount_price) if obj.discount_price else None
+                "discount_percent": str(obj.discount_percent) if obj.discount_percent else None
             }
 
 
@@ -181,7 +181,7 @@ class ProductSearchSerializer(serializers.ModelSerializer):
     category = serializers.CharField(source="category.name", read_only=True)
     image = serializers.SerializerMethodField()
     price = serializers.SerializerMethodField()
-    discount_price = serializers.SerializerMethodField()
+    discount_percent = serializers.SerializerMethodField()
     has_stock = serializers.SerializerMethodField()
 
     class Meta:
@@ -193,7 +193,7 @@ class ProductSearchSerializer(serializers.ModelSerializer):
             "category",
             "image",
             "price",
-            "discount_price",
+            "discount_percent",
             "has_stock",
         ]
 
@@ -214,11 +214,11 @@ class ProductSearchSerializer(serializers.ModelSerializer):
             return str(sku.price)
         return None
 
-    def get_discount_price(self, obj):
-        """Return the first active SKU's discount price."""
+    def get_discount_percent(self, obj):
+        """Return the first active SKU's discount percent."""
         sku = obj.skus.filter(is_active=True).first()
-        if sku and sku.discount_price:
-            return str(sku.discount_price)
+        if sku and sku.discount_percent is not None:
+            return str(sku.discount_percent)
         return None
 
     def get_has_stock(self, obj):

@@ -369,21 +369,16 @@ class OrderSerializer(serializers.ModelSerializer):
 
             # compute price and tax via helper (ensures consistent logic)
             try:
-                unit_price, tax_details = calculate_sku_price(sku_obj)
+                final_price, tax_details = calculate_sku_price(sku_obj)
             except Exception as e:
                 raise serializers.ValidationError(f"Price calculation failed for SKU {sku_obj.sku_code}: {str(e)}")
 
-            # discount handling: use sku.discount_price if available or 0
-            discount = getattr(sku_obj, "discount_price", None) or Decimal("0.00")
-            if discount is None:
-                discount = Decimal("0.00")
-            # ensure discount <= unit_price
-            item_subtotal = Decimal(unit_price)
-            # discount = Decimal(discount)
-            # if discount > unit_price:
-            #     discount = Decimal("0.00")
+            # get values from breakdown
+            pb = tax_details.get("price_breakdown", {})
+            unit_price = Decimal(str(pb.get("base_price", final_price)))
+            discount = Decimal(str(pb.get("discount_amount", "0.00")))
 
-            # item_subtotal = quantize_money((unit_price - discount) * qty)
+            item_subtotal = final_price * qty
             print(item_subtotal)
             # Decrement stock
             sku_obj.stock_qty = sku_obj.stock_qty - qty
@@ -472,12 +467,12 @@ class OrderSerializer(serializers.ModelSerializer):
                 if sku_obj.stock_qty < qty:
                     raise serializers.ValidationError(f"Only {sku_obj.stock_qty} items available for SKU {sku_obj.sku_code}.")
 
-                unit_price, tax_details = calculate_sku_price(sku_obj)
-                discount = getattr(sku_obj, "discount_price", None) or Decimal("0.00")
-                if discount > unit_price:
-                    discount = Decimal("0.00")
+                final_price, tax_details = calculate_sku_price(sku_obj)
+                pb = tax_details.get("price_breakdown", {})
+                unit_price = Decimal(str(pb.get("base_price", final_price)))
+                discount = Decimal(str(pb.get("discount_amount", "0.00")))
 
-                item_subtotal = quantize_money((Decimal(unit_price) - Decimal(discount)) * qty)
+                item_subtotal = final_price * qty
 
                 # decrement stock
                 sku_obj.stock_qty = sku_obj.stock_qty - qty

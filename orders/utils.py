@@ -29,147 +29,105 @@ def get_latest_rate_for_variant(variant):
 
 def calculate_sku_price(sku):
     """
-    Compute unit price for a SKU using your CommodityRate logic or fixed price.
-    Returns: (unit_price Decimal, tax_details dict)
+    Compute unit price for a SKU using dynamic commodity pricing or fixed price.
+    Returns: (final_price Decimal, price_breakdown dict)
     """
-    # If SKU uses fixed price, return that price (taxes could be included/excluded depending on your rules)
-    if getattr(sku, "sell_by_fixed_price", False) and sku.fixed_price is not None:
-        unit_price = Decimal(sku.fixed_price)
-        tax_details = {"method": "fixed_price", "grand_total": str(unit_price)}
-        return quantize_money(unit_price), tax_details
+    if getattr(sku, "sell_by_fixed_price", False) and getattr(sku, "fixed_price", None) is not None:
+        final_price = quantize_money(Decimal(sku.fixed_price))
+        price_breakdown = {
+            "sku": sku.sku_code,
+            "price_breakdown": {
+                "method": "fixed_price",
+                "final_price": str(final_price),
+                "base_price": str(final_price),
+                "discount_percent": "0",
+                "discount_amount": "0.00"
+            }
+        }
+        return final_price, price_breakdown
 
-    # Need commodity variant and a latest rate
     variant = getattr(sku, "commodity_variant", None)
     rate = get_latest_rate_for_variant(variant)
     if rate is None:
-        raise ValueError("No active commodity rate found for SKU variant")
+        raise ValueError(f"No active commodity rate found for SKU variant. SKU: {sku.sku_code}")
 
     commodity_type = variant.commodity.category  # "metal" or "stone"
+    discount_percent = Decimal(getattr(sku, "discount_percent", 0) or 0)
     
-    # Check if there's a discount price
-    discount_price_val = getattr(sku, "discount_price", None)
-    if discount_price_val is not None and discount_price_val > 0:
-        has_discount = True
-        final_price_target = Decimal(discount_price_val)
-    else:
-        has_discount = False
-        final_price_target = Decimal("0")
+    metal_value = Decimal("0")
+    stone_value = Decimal("0")
+    wastage = Decimal("0")
+    making_charge = Decimal("0")
+    subtotal = Decimal("0")
     
-    unit_price = Decimal("0")
+    hallmark = Decimal(sku.hallmark_charges or 0)
+    packaging = Decimal(sku.packaging_charges or 0)
+    delivery = Decimal("0.00")
+    
+    cgst_percent = Decimal(rate.cgst_percent or Decimal("1.5"))
+    sgst_percent = Decimal(rate.sgst_percent or Decimal("1.5"))
 
-    # base computations
     if commodity_type == "metal":
         gold_rate = Decimal(rate.unit_price)
         weight = Decimal(sku.weight or 0)
         
-        # unit_price is rate.unit_price * weight (weight in grams usually)
-        base_value = gold_rate * weight
-        wastage = (base_value * Decimal(rate.wastage_percent or 0)) / Decimal("100")
+        metal_value = gold_rate * weight
+        wastage_percent = Decimal(rate.wastage_percent or 0)
+        wastage = (metal_value * wastage_percent) / Decimal("100")
         making_charge = Decimal(sku.making_charge or 0)
         
-        original_subtotal = base_value + wastage + making_charge
-
-        hallmark = Decimal(sku.hallmark_charges or 0)
-        delivery = Decimal("0.00") # Decimal(sku.delivery_charges or 0)
-        packaging = Decimal(sku.packaging_charges or 0)
-        extras = hallmark + delivery + packaging
-
-        cgst_percent = Decimal(rate.cgst_percent or 0)
-        sgst_percent = Decimal(rate.sgst_percent or 0)
-        total_gst_percent = cgst_percent + sgst_percent
-
-        if has_discount:
-            # Reverse calculate from the discounted final price
-            # Final = Taxable + (Taxable * GST%) + Extras
-            # Taxable = (Final - Extras) / (1 + GST%)
-            taxable_value = (final_price_target - extras) / (Decimal("1") + (total_gst_percent / Decimal("100")))
-            discount_amount = original_subtotal - taxable_value
-            subtotal = taxable_value
-            cgst = (subtotal * cgst_percent) / Decimal("100")
-            sgst = (subtotal * sgst_percent) / Decimal("100")
-            unit_price = final_price_target
-        else:
-            subtotal = original_subtotal
-            discount_amount = Decimal("0")
-            cgst = (subtotal * cgst_percent) / Decimal("100")
-            sgst = (subtotal * sgst_percent) / Decimal("100")
-            unit_price = subtotal + cgst + sgst + extras
-
-        # Rounding
-        grand_total = unit_price.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
-        round_off = grand_total - unit_price
-
-        tax_details = {
-            "method": "commodity_metal",
-            "gold_rate": str(quantize_money(gold_rate)),
-            "weight": str(weight),
-            "unit_base_value": str(quantize_money(base_value)),
-            "wastage_value": str(quantize_money(wastage)),
-            "making_charge": str(quantize_money(making_charge)),
-            "discount_amount": str(quantize_money(discount_amount)),
-            "subtotal": str(quantize_money(subtotal)),
-            "cgst_percent": str(cgst_percent),
-            "sgst_percent": str(sgst_percent),
-            "cgst_value": str(quantize_money(cgst)),
-            "sgst_value": str(quantize_money(sgst)),
-            "hallmark_charges": str(quantize_money(hallmark)),
-            "delivery_charges": str(quantize_money(delivery)),
-            "packaging_charges": str(quantize_money(packaging)),
-            "round_off": str(quantize_money(round_off)),
-            "grand_total": str(grand_total),
-            "unit_price": str(quantize_money(unit_price))
-        }
-
+        subtotal = metal_value + wastage + making_charge
+        
+        cgst = (subtotal * cgst_percent) / Decimal("100")
+        sgst = (subtotal * sgst_percent) / Decimal("100")
     else:
-        # stone pricing (ratti multiplier -> carat)
         ratti_multiplier = Decimal(rate.ratti_multiplier or 0)
         carat_weight = Decimal(sku.weight or 0) * ratti_multiplier
-        original_stone_value = carat_weight * Decimal(rate.unit_price)
+        stone_value = carat_weight * Decimal(rate.unit_price)
         
-        hallmark = Decimal(sku.hallmark_charges or 0)
-        delivery = Decimal("0.00") # Decimal(sku.delivery_charges or 0)
-        packaging = Decimal(sku.packaging_charges or 0)
-        extras = hallmark + delivery + packaging
+        subtotal = stone_value
+        cgst = (subtotal * cgst_percent) / Decimal("100")
+        sgst = (subtotal * sgst_percent) / Decimal("100")
 
-        cgst_percent = Decimal(rate.cgst_percent or 0)
-        sgst_percent = Decimal(rate.sgst_percent or 0)
-        gst_total_percent = cgst_percent + sgst_percent
+    extras = hallmark + packaging + delivery
+    
+    base_price = subtotal + cgst + sgst + extras
+    
+    discount_amount = (base_price * discount_percent) / Decimal("100")
+    
+    final_price = base_price - discount_amount
+    
+    final_price_quantized = quantize_money(final_price)
+    
+    price_breakdown_dict = {
+        "gold_rate": float(rate.unit_price) if commodity_type == "metal" else 0,
+        "weight": float(sku.weight or 0),
+        
+        "metal_value": float(quantize_money(metal_value)) if commodity_type == "metal" else 0,
+        "stone_value": float(quantize_money(stone_value)) if commodity_type == "stone" else 0,
+        "wastage": float(quantize_money(wastage)),
+        "making_charge": float(quantize_money(making_charge)),
+        
+        "subtotal": float(quantize_money(subtotal)),
+        
+        "cgst": float(quantize_money(cgst)),
+        "sgst": float(quantize_money(sgst)),
+        
+        "hallmark": float(quantize_money(hallmark)),
+        "packaging": float(quantize_money(packaging)),
+        "delivery": float(quantize_money(delivery)),
+        
+        "base_price": float(quantize_money(base_price)),
+        
+        "discount_percent": float(discount_percent),
+        "discount_amount": float(quantize_money(discount_amount)),
+        
+        "final_price": float(final_price_quantized)
+    }
 
-        if has_discount:
-            taxable_value = (final_price_target - extras) / (Decimal("1") + (gst_total_percent / Decimal("100")))
-            discount_amount = original_stone_value - taxable_value
-            stone_value = taxable_value
-            cgst = (stone_value * cgst_percent) / Decimal("100")
-            sgst = (stone_value * sgst_percent) / Decimal("100")
-            unit_price = final_price_target
-        else:
-            stone_value = original_stone_value
-            discount_amount = Decimal("0")
-            cgst = (stone_value * cgst_percent) / Decimal("100")
-            sgst = (stone_value * sgst_percent) / Decimal("100")
-            unit_price = stone_value + cgst + sgst + extras
-
-        # Rounding
-        grand_total = unit_price.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
-        round_off = grand_total - unit_price
-
-        tax_details = {
-            "method": "commodity_stone",
-            "carat_weight": str(carat_weight),
-            "unit_base_value": str(quantize_money(original_stone_value)),
-            "stone_value": str(quantize_money(stone_value)),
-            "discount_amount": str(quantize_money(discount_amount)),
-            "gst_percent_total": str(gst_total_percent),
-            "cgst_percent": str(cgst_percent),
-            "sgst_percent": str(sgst_percent),
-            "cgst_value": str(quantize_money(cgst)),
-            "sgst_value": str(quantize_money(sgst)),
-            "hallmark_charges": str(quantize_money(hallmark)),
-            "delivery_charges": str(quantize_money(delivery)),
-            "packaging_charges": str(quantize_money(packaging)),
-            "round_off": str(quantize_money(round_off)),
-            "grand_total": str(grand_total),
-            "unit_price": str(quantize_money(unit_price))
-        }
-
-    return quantize_money(unit_price), tax_details
+    response = {
+        "sku": sku.sku_code,
+        "price_breakdown": price_breakdown_dict
+    }
+    
+    return final_price_quantized, response
