@@ -1,6 +1,5 @@
 from decimal import Decimal, ROUND_HALF_UP
 from django.db.models import Q
-from inventory.models import CommodityRate
 import uuid
 from datetime import datetime
 import logging
@@ -20,6 +19,7 @@ def get_latest_rate_for_variant(variant):
     """
     if not variant:
         return None
+    from inventory.models import CommodityRate
     return (
         CommodityRate.objects.filter(variant=variant, is_active=True)
         .order_by("-effective_date")
