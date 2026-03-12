@@ -98,7 +98,17 @@ def calculate_sku_price(sku):
     final_price = base_price - discount_amount
     
     final_price_quantized = quantize_money(final_price)
-    
+    print("DEBUG PRICE CALCULATION")
+    print("rate:", rate.unit_price)
+    print("weight:", sku.weight)
+    print("metal_value:", metal_value)
+    print("wastage:", wastage)
+    print("making_charge:", making_charge)
+    print("subtotal:", subtotal)
+    print("cgst:", cgst)
+    print("sgst:", sgst)
+    print("extras:", extras)
+    print("base_price:", base_price)
     price_breakdown_dict = {
         "gold_rate": float(rate.unit_price) if commodity_type == "metal" else 0,
         "weight": float(sku.weight or 0),
@@ -129,5 +139,6 @@ def calculate_sku_price(sku):
         "sku": sku.sku_code,
         "price_breakdown": price_breakdown_dict
     }
+    print("DEBUG: ", response)
     
     return final_price_quantized, response
