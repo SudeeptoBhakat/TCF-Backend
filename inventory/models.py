@@ -11,6 +11,8 @@ from django.db import transaction
 import uuid
 import logging
 
+from orders.utils import calculate_sku_price, get_latest_rate_for_variant
+
 logger = logging.getLogger(__name__)
 
 
@@ -369,130 +371,64 @@ class ProductSKU(TimestampedModel):
     def __str__(self):
         return f"{self.sku_code} - {self.product.name}"
 
-    def recalculate_price_from_rate(self, rate: CommodityRate):
+    def recalculate_price_from_rate(self, rate=None):
         """
-        CORE FIX: Dynamically recalculate SKU price from commodity rate.
-        Handles both metal and stone pricing with full GST support.
+        Recalculate SKU price using the central pricing engine.
+        Works for both METAL and STONE.
         """
-        method_name = "recalculate_price_from_rate"
-        
+
         try:
-            # ====================================================================
-            # 1. VALIDATION CHECKS
-            # ====================================================================
+
+            # Skip if fixed price SKU
             if self.sell_by_fixed_price:
-                logger.debug(f"SKU {self.sku_code}: sell_by_fixed_price=True, skipping recalculation")
+                logger.debug(f"SKU {self.sku_code}: Fixed price enabled. Skipping recalculation.")
                 return
 
             if not self.commodity_variant:
-                raise ValueError(f"SKU {self.sku_code}: No commodity_variant assigned. Cannot calculate price.")
+                raise ValueError(f"SKU {self.sku_code}: commodity_variant missing")
 
             if not self.weight or self.weight <= 0:
-                raise ValueError(f"SKU {self.sku_code}: Invalid weight ({self.weight}). Cannot calculate price.")
+                raise ValueError(f"SKU {self.sku_code}: invalid weight")
+
+            # If rate not passed → fetch latest
+            if rate is None:
+                rate = get_latest_rate_for_variant(self.commodity_variant)
 
             if not rate:
-                raise ValueError(f"SKU {self.sku_code}: No CommodityRate provided.")
+                raise ValueError(f"No CommodityRate found for SKU {self.sku_code}")
 
-            if rate.unit_price <= 0:
-                raise ValueError(f"SKU {self.sku_code}: Rate unit_price is invalid ({rate.unit_price})")
+            # ===============================
+            # CORE PRICE CALCULATION
+            # ===============================
 
-            # ====================================================================
-            # 2. DETERMINE COMMODITY TYPE & LOG START
-            # ====================================================================
-            commodity_type = self.commodity_variant.commodity.category
-            
+            final_price, breakdown = calculate_sku_price(self)
+
             logger.info(
-                f"[{method_name}] SKU: {self.sku_code} | Type: {commodity_type} | "
-                f"Weight: {self.weight}g | Rate: ₹{rate.unit_price} | "
-                f"Date: {rate.effective_date}"
+                f"[PRICE ENGINE] SKU {self.sku_code} → Final Price ₹{final_price}"
             )
 
-            base_price = Decimal("0")
-            calculation_log = {}
+            # ===============================
+            # SAVE PRICE SAFELY
+            # ===============================
 
-            # ====================================================================
-            # 3. METAL PRICING (GOLD, SILVER)
-            # ====================================================================
-            if commodity_type == "metal":
-                try:
-                    # Base metal value
-                    gold_value = rate.unit_price * self.weight
+            with transaction.atomic():
 
-                    # Wastage
-                    wastage_value = (gold_value * rate.wastage_percent) / Decimal("100")
+                self.price = final_price
+                self.save(update_fields=["price", "updated_at"])
 
-                    # Making charge
-                    making_charge_val = Decimal(self.making_charge or 0)
+            logger.info(
+                f"✓ SKU {self.sku_code} price updated successfully → ₹{self.price}"
+            )
 
-                    # Subtotal = gold_value + wastage + making_charge
-                    subtotal = gold_value + wastage_value + making_charge_val
-                    print(gold_value, '+', wastage_value, '+', making_charge_val)
-                    # GST CALCULATION (CRITICAL FIX)
-                    cgst_value = (subtotal * rate.cgst_percent) / Decimal("100")
-                    sgst_value = (subtotal * rate.sgst_percent) / Decimal("100")
-                    gst_total = cgst_value + sgst_value
-
-                    # Additional charges
-                    hallmark = Decimal(self.hallmark_charges or 0)
-                    delivery = 0 # Decimal(self.delivery_charges or 0)
-                    packaging = Decimal(self.packaging_charges or 0)
-
-                    # FINAL PRICE FOR METAL
-                    final_price = subtotal + gst_total + hallmark + delivery + packaging
-                    print(subtotal, '+', gst_total, '+', hallmark, '+', delivery, '+', packaging)
-
-                    base_price = final_price
-                except Exception as metal_err:
-                    logger.error(f"  ✗ Metal pricing calculation failed: {metal_err}", exc_info=True)
-                    raise
-
-            # ====================================================================
-            # 4. STONE PRICING (DIAMOND, RUBY, etc.)
-            # ====================================================================
-            else:
-                try:
-                    # Ratti to Carat conversion
-                    carat_weight = self.weight * rate.ratti_multiplier
-
-                    # Stone value
-                    stone_value = carat_weight * rate.unit_price
-
-                    # GST CALCULATION (CRITICAL FIX)
-                    gst_percent_total = rate.cgst_percent + rate.sgst_percent
-                    gst_value = (stone_value * gst_percent_total) / Decimal("100")
-                    
-                    
-                    # Additional charges
-                    hallmark = Decimal(self.hallmark_charges or 0)
-                    delivery = 0 # Decimal(rate.delivery_charges or 0)
-                    packaging = Decimal(self.packaging_charges or 0)
-                    
-                    # FINAL PRICE FOR STONE
-                    final_price = stone_value + gst_value + hallmark + delivery + packaging
-                    
-                    base_price = final_price
-
-                except Exception as stone_err:
-                    logger.error(f"  ✗ Stone pricing calculation failed: {stone_err}", exc_info=True)
-                    raise
-
-            # ====================================================================
-            # 5. SAVE WITH ATOMIC TRANSACTION
-            # ====================================================================
-            # Quantize to 2 decimal places
-            self.price = base_price.quantize(Decimal("0.01"))
-            
-            logger.info(f"  ✓ Saving SKU {self.sku_code}: Price = ₹{self.price}")
-            self.save(update_fields=["price", "updated_at"])
-            
-            logger.info(f"  ✓ Price update SUCCESS for {self.sku_code} | Calculation: {calculation_log}")
+            return breakdown
 
         except Exception as e:
+
             logger.error(
-                f"  ✗ CRITICAL ERROR in recalculate_price_from_rate for SKU {self.sku_code}: {str(e)}",
-                exc_info=True,
-                extra={"sku_code": self.sku_code, "rate_id": rate.id if rate else None}
+                f"✗ Price recalculation failed for SKU {self.sku_code}: {str(e)}",
+                exc_info=True
             )
+
             raise
 
     def decrement_stock(self, qty: int):
