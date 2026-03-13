@@ -370,6 +370,63 @@ class ProductSKU(TimestampedModel):
             models.Index(fields=["sell_by_fixed_price"]),
         ]
 
+    def clean(self):
+        super().clean()
+        from django.core.exceptions import ValidationError
+        
+        if self.sell_by_fixed_price:
+            if self.fixed_price is None or self.fixed_price < 0:
+                raise ValidationError({"fixed_price": "Fixed price cannot be negative or null."})
+        else:
+            if not self.commodity_variant:
+                raise ValidationError({"commodity_variant": "Missing Commodity Variant"})
+            
+            weight = Decimal(str(self.weight or 0))
+            making_charge = Decimal(str(self.making_charge or 0))
+            hallmark = Decimal(str(self.hallmark_charges or 0))
+            packaging = Decimal(str(self.packaging_charges or 0))
+            
+            if weight == 0:
+                if making_charge != 0 or hallmark != 0 or packaging != 0:
+                    raise ValidationError({"weight": "weight missing"})
+            elif weight < 0:
+                raise ValidationError({"weight": "Invalid weight"})
+                
+            from orders.utils import get_latest_rate_for_variant
+            rate = get_latest_rate_for_variant(self.commodity_variant)
+            if rate is None or rate.unit_price <= 0:
+                raise ValidationError({"commodity_variant": "Missing Commodity Rate"})
+
+        if self.discount_percent and (self.discount_percent < 0 or self.discount_percent > 100):
+            raise ValidationError({"discount_percent": "max discount = 100%"})
+
+        if self.making_charge and self.making_charge < 0:
+            raise ValidationError({"making_charge": "Charges cannot be negative"})
+            
+        if self.packaging_charges and self.packaging_charges < 0:
+            raise ValidationError({"packaging_charges": "Charges cannot be negative"})
+            
+        if self.hallmark_charges and getattr(self, "hallmark_charges", 0) < 0:
+            raise ValidationError({"hallmark_charges": "Charges cannot be negative"})
+            
+        if getattr(self, "stock_qty", 0) < 0:
+            raise ValidationError({"stock_qty": "Stock cannot be negative"})
+
+    def save(self, *args, **kwargs):
+        if not kwargs.get("update_fields"):
+            if self.sell_by_fixed_price:
+                self.price = Decimal(str(self.fixed_price or 0))
+            else:
+                try:
+                    from orders.utils import calculate_sku_price
+                    price, _ = calculate_sku_price(self)
+                    self.price = price
+                except Exception as e:
+                    logger.error(f"Error calculating base price for {self.sku_code}: {e}")
+                    if self.price is None:
+                        self.price = Decimal("0")
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.sku_code} - {self.product.name}"
     
@@ -615,14 +672,15 @@ def update_sku_prices_after_rate_change(sender, instance, created, **kwargs):
 
             for sku in skus:
                 try:
-                    logger.debug(f"[post_save Signal-{signal_id}] Processing SKU: {sku.sku_code}")
-                    sku.recalculate_price_from_rate(instance)
-                    successful_skus.append(sku.sku_code)
-                    logger.debug(f"  ✓ Updated {sku.sku_code}: ₹{sku.price}")
+                    with transaction.atomic():
+                        logger.debug(f"[post_save Signal-{signal_id}] Processing SKU: {sku.sku_code}")
+                        sku.recalculate_price_from_rate(instance)
+                        successful_skus.append(sku.sku_code)
+                        logger.debug(f"  ✓ Updated {sku.sku_code}: ₹{sku.price}")
 
                 except Exception as sku_err:
                     logger.error(
-                        f"[post_save Signal-{signal_id}] Failed to update SKU {sku.sku_code}: {str(sku_err)}",
+                        f"[post_save Signal-{signal_id}] Failed to update SKU {sku.sku_code}: {str(sku_err)}. Transaction rolled back.",
                         exc_info=True
                     )
                     failed_skus.append((sku.sku_code, str(sku_err)))
