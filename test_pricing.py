@@ -6,51 +6,51 @@ from decimal import Decimal
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
 
-import orders.utils
+from inventory.models import ProductSKU, CommodityVariant, Commodity, CommodityRate
+from orders.utils import calculate_sku_price
+
+# We will create mock objects using actual Django models but not save them to DB to avoid DB constraints.
+# Or better, we can monkey-patch get_price_breakdown onto MockSKU if we want to keep it simple, 
+# but testing with actual ProductSKU is better.
 
 class MockCommodity:
-    def __init__(self, cat):
-        self.category = cat
+    category = 'metal'
 
 class MockVariant:
-    def __init__(self, c):
-        self.commodity = c
+    commodity = MockCommodity()
 
 class MockRate:
-    def __init__(self, up, w, c, s, r):
-        self.unit_price = Decimal(str(up))
-        self.wastage_percent = Decimal(str(w))
-        self.cgst_percent = Decimal(str(c))
-        self.sgst_percent = Decimal(str(s))
-        self.ratti_multiplier = Decimal(str(r))
+    unit_price = Decimal("6000")
+    wastage_percent = Decimal("5")
+    cgst_percent = Decimal("1.5")
+    sgst_percent = Decimal("1.5")
+    ratti_multiplier = Decimal("0")
 
 class MockSKU:
-    def __init__(self, variant, weight, mc, hc, pc, dp, f=False, fp=None):
-        self.sku_code = 'RING-22K-10G'
-        self.commodity_variant = variant
-        self.weight = Decimal(str(weight))
-        self.making_charge = Decimal(str(mc))
-        self.hallmark_charges = Decimal(str(hc))
-        self.packaging_charges = Decimal(str(pc))
-        self.discount_percent = Decimal(str(dp))
-        self.sell_by_fixed_price = f
-        self.fixed_price = Decimal(str(fp)) if fp else None
+    sku_code = 'RING-22K-10G'
+    commodity_variant = MockVariant()
+    weight = Decimal("10")
+    making_charge = Decimal("2000")
+    hallmark_charges = Decimal("53")
+    packaging_charges = Decimal("20")
+    discount_percent = Decimal("10")
+    sell_by_fixed_price = False
+    fixed_price = None
+    price = Decimal("0")
 
-original_get = orders.utils.get_latest_rate_for_variant
+# Attach the method from ProductSKU to MockSKU
+MockSKU.get_price_breakdown = ProductSKU.get_price_breakdown
 
-metal_variant = MockVariant(MockCommodity('metal'))
-rate_metal = MockRate(up=6000, w=5, c=1.5, s=1.5, r=0)
+sku_metal = MockSKU()
 
-orders.utils.get_latest_rate_for_variant = lambda v: rate_metal
-
-sku_metal = MockSKU(variant=metal_variant, weight=10, mc=2000, hc=53, pc=20, dp=10)
-
-fp, breakdown = orders.utils.calculate_sku_price(sku_metal)
+# Now call the wrapper or the method directly
+# We also need to patch get_price_breakdown since it might fetch rates or we can pass rate.
+# Wait, get_price_breakdown fetches rate using CommodityRate.objects.filter if not passed.
+breakdown = sku_metal.get_price_breakdown(rate=MockRate())
 
 print('================== METAL TEST RESULTS ==================')
-print(f'Final Price: {fp}')
-print(f'Matches expected (60321): {fp == Decimal("60321.00")}')
+print(f'Final Price: {breakdown["final_price"]}')
+print(f'Matches expected (60321): {breakdown["final_price"] == 60321.00}')
 import json
 print(json.dumps(breakdown, indent=2))
 
-orders.utils.get_latest_rate_for_variant = original_get

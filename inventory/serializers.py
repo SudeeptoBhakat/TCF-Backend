@@ -125,14 +125,18 @@ class ProductSKUSerializer(serializers.ModelSerializer):
 
     def get_pricing_details(self, obj):
         try:
-            _, tax_details = calculate_sku_price(obj)
-            return tax_details
-        except Exception:
-            # Fallback to base model price fields if calculation fails
+            breakdown = obj.get_price_breakdown()
             return {
-                "method": "fallback",
-                "unit_price": str(obj.price),
-                "discount_percent": str(obj.discount_percent) if obj.discount_percent else None
+                "sku": obj.sku_code,
+                "price_breakdown": breakdown
+            }
+        except Exception:
+            return {
+                "sku": obj.sku_code,
+                "price_breakdown": {
+                    "method": "fallback",
+                    "final_price": float(obj.price or 0)
+                }
             }
 
 
