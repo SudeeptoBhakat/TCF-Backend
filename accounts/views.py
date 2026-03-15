@@ -125,11 +125,27 @@ class RefreshFromCookieAPIView(APIView):
             return Response({"detail": "No refresh token cookie."}, status=status.HTTP_401_UNAUTHORIZED)
         try:
             refresh = RefreshToken(refresh_token)
+            
             # optionally rotate:
             new_access = str(refresh.access_token)
-            # If you use ROTATE_REFRESH_TOKENS=True you'd create a new refresh token as well.
-            data = {"access": new_access}
-            return Response(data, status=status.HTTP_200_OK)
+            
+            # ROTATE_REFRESH_TOKENS=True: blacklist old and create new
+            refresh.blacklist()
+            new_refresh = RefreshToken.for_user(refresh.access_token.payload.get('user_id'))
+            
+            response = Response({"access": new_access}, status=status.HTTP_200_OK)
+            
+            cookie_max_age = 7 * 24 * 60 * 60  # 7 days
+            response.set_cookie(
+                key="refresh_token",
+                value=str(new_refresh),
+                httponly=True,
+                secure=True,
+                samesite="None",
+                max_age=cookie_max_age,
+            )
+            return response
+            
         except TokenError:
             return Response({"detail": "Invalid refresh token."}, status=status.HTTP_401_UNAUTHORIZED)
 
@@ -145,6 +161,14 @@ class LogoutAPIView(APIView):
     permission_classes = (permissions.IsAuthenticated,)
 
     def post(self, request):
+        try:
+            refresh_token = request.COOKIES.get("refresh_token")
+            if refresh_token:
+                token = RefreshToken(refresh_token)
+                token.blacklist()
+        except Exception as e:
+            # Ignore token errors on logout if token is already expired/invalid
+            pass
 
         res = Response(
             {"message": "Logout successful."},
@@ -278,8 +302,8 @@ class FacebookLoginAPIView(APIView):
             key="refresh_token",
             value=refresh_token_jwt,
             httponly=True,
-            secure=False,   # set True in production (requires https)
-            samesite="Lax",
+            secure=True, 
+            samesite="None",
             max_age=cookie_max_age,
         )
 
