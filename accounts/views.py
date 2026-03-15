@@ -324,114 +324,259 @@ class LogoutAPIView(APIView):
 
 # User = get_user_model()
 
+# class FacebookLoginAPIView(APIView):
+#     permission_classes = (permissions.AllowAny,)
+
+#     def post(self, request):
+#         """
+#         Expects: { access_token: "<FB user access token>", remember: bool optional }
+#         Flow:
+#           1. Call debug_token to validate the token was issued for our app
+#           2. If valid, fetch user profile (email, name, picture)
+#           3. Create or get user, set auth_provider
+#           4. Issue JWT tokens and set refresh cookie
+#         """
+#         access_token = request.data.get("access_token")
+#         remember = bool(request.data.get("remember", False))
+
+#         if not access_token:
+#             return Response({"detail": "Missing access_token"}, status=status.HTTP_400_BAD_REQUEST)
+
+#         if not fb_app_id or not fb_app_secret:
+#             return Response({"detail": "Facebook app credentials not configured"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+#         # Verify token belongs to this app using debug_token
+#         app_token = f"{fb_app_id}|{fb_app_secret}"
+#         debug_url = "https://graph.facebook.com/debug_token"
+#         try:
+#             debug_resp = requests.get(debug_url, params={
+#                 "input_token": access_token,
+#                 "access_token": app_token
+#             }, timeout=10)
+#             debug_resp.raise_for_status()
+#             debug_data = debug_resp.json()
+#         except Exception as e:
+#             traceback.print_exc()
+#             return Response({"detail": "Failed to validate Facebook token", "error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+#         data = debug_data.get("data", {})
+#         if not data.get("is_valid"):
+#             return Response({"detail": "Invalid Facebook token"}, status=status.HTTP_400_BAD_REQUEST)
+
+#         # check app id matches
+#         if str(data.get("app_id")) != str(fb_app_id):
+#             return Response({"detail": "Facebook token was not issued for this app"}, status=status.HTTP_400_BAD_REQUEST)
+
+#         # Fetch profile
+#         try:
+#             profile_url = "https://graph.facebook.com/me"
+#             profile_resp = requests.get(profile_url, params={
+#                 "fields": "id,name,email,picture",
+#                 "access_token": access_token
+#             }, timeout=10)
+#             profile_resp.raise_for_status()
+#             profile = profile_resp.json()
+#         except Exception as e:
+#             traceback.print_exc()
+#             return Response({"detail": "Failed to fetch Facebook profile", "error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+#         email = profile.get("email")
+#         name = profile.get("name", "")
+#         facebook_id = profile.get("id")
+#         picture = None
+#         pic = profile.get("picture")
+#         if isinstance(pic, dict):
+#             picture = pic.get("data", {}).get("url")
+
+#         if not email:
+#             # Facebook accounts sometimes don't return email
+#             return Response({"detail": "Facebook account has no email address"}, status=status.HTTP_400_BAD_REQUEST)
+
+#         # Create/get user
+#         try:
+#             user, created = User.objects.get_or_create(email=email, defaults={
+#                 "full_name": name,
+#                 "auth_provider": "meta",  # or 'facebook' if you prefer
+#                 "is_verified": True,
+#             })
+#             # if existing user had different provider, link or update
+#             if not created and user.auth_provider != "meta":
+#                 # Option: set provider to meta (or keep original and ask the user)
+#                 user.auth_provider = "meta"
+#                 user.is_verified = user.is_verified or True
+#                 user.save(update_fields=["auth_provider", "is_verified"])
+#         except Exception as e:
+#             traceback.print_exc()
+#             return Response({"detail": "Error creating or retrieving user", "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+#         # Issue JWT tokens
+#         refresh = RefreshToken.for_user(user)
+#         access_token_jwt = str(refresh.access_token)
+#         refresh_token_jwt = str(refresh)
+
+#         # Set refresh token cookie
+#         cookie_max_age = 30 * 24 * 60 * 60 if remember else 7 * 24 * 60 * 60
+#         response_data = {
+#             "user": UserSerializer(user).data,
+#             "access": access_token_jwt,
+#         }
+#         response = Response(response_data, status=status.HTTP_200_OK)
+#         response.set_cookie(
+#             key="refresh_token",
+#             value=refresh_token_jwt,
+#             httponly=True,
+#             secure=True, 
+#             samesite="None",
+#             max_age=cookie_max_age,
+#         )
+
+#         return response
+
 class FacebookLoginAPIView(APIView):
     permission_classes = (permissions.AllowAny,)
 
     def post(self, request):
-        """
-        Expects: { access_token: "<FB user access token>", remember: bool optional }
-        Flow:
-          1. Call debug_token to validate the token was issued for our app
-          2. If valid, fetch user profile (email, name, picture)
-          3. Create or get user, set auth_provider
-          4. Issue JWT tokens and set refresh cookie
-        """
+
         access_token = request.data.get("access_token")
         remember = bool(request.data.get("remember", False))
 
         if not access_token:
-            return Response({"detail": "Missing access_token"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Missing access_token"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         if not fb_app_id or not fb_app_secret:
-            return Response({"detail": "Facebook app credentials not configured"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"detail": "Facebook credentials not configured"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-        # Verify token belongs to this app using debug_token
+        # Step 1: Validate token with Facebook
         app_token = f"{fb_app_id}|{fb_app_secret}"
         debug_url = "https://graph.facebook.com/debug_token"
+
         try:
-            debug_resp = requests.get(debug_url, params={
-                "input_token": access_token,
-                "access_token": app_token
-            }, timeout=10)
+            debug_resp = requests.get(
+                debug_url,
+                params={
+                    "input_token": access_token,
+                    "access_token": app_token
+                },
+                timeout=10
+            )
             debug_resp.raise_for_status()
             debug_data = debug_resp.json()
+
         except Exception as e:
             traceback.print_exc()
-            return Response({"detail": "Failed to validate Facebook token", "error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Failed to validate Facebook token", "error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         data = debug_data.get("data", {})
+
         if not data.get("is_valid"):
-            return Response({"detail": "Invalid Facebook token"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Invalid Facebook token"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        # check app id matches
         if str(data.get("app_id")) != str(fb_app_id):
-            return Response({"detail": "Facebook token was not issued for this app"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Facebook token was not issued for this app"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        # Fetch profile
+        # Step 2: Fetch user profile
         try:
             profile_url = "https://graph.facebook.com/me"
-            profile_resp = requests.get(profile_url, params={
-                "fields": "id,name,email,picture",
-                "access_token": access_token
-            }, timeout=10)
+
+            profile_resp = requests.get(
+                profile_url,
+                params={
+                    "fields": "id,name,email,picture",
+                    "access_token": access_token
+                },
+                timeout=10
+            )
+
             profile_resp.raise_for_status()
             profile = profile_resp.json()
+
         except Exception as e:
             traceback.print_exc()
-            return Response({"detail": "Failed to fetch Facebook profile", "error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Failed to fetch Facebook profile", "error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         email = profile.get("email")
         name = profile.get("name", "")
         facebook_id = profile.get("id")
+
         picture = None
         pic = profile.get("picture")
         if isinstance(pic, dict):
             picture = pic.get("data", {}).get("url")
 
         if not email:
-            # Facebook accounts sometimes don't return email
-            return Response({"detail": "Facebook account has no email address"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Facebook account has no email address"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        # Create/get user
+        # Step 3: Create or get user
         try:
-            user, created = User.objects.get_or_create(email=email, defaults={
-                "full_name": name,
-                "auth_provider": "meta",  # or 'facebook' if you prefer
-                "is_verified": True,
-            })
-            # if existing user had different provider, link or update
-            if not created and user.auth_provider != "meta":
-                # Option: set provider to meta (or keep original and ask the user)
-                user.auth_provider = "meta"
-                user.is_verified = user.is_verified or True
-                user.save(update_fields=["auth_provider", "is_verified"])
+
+            user, created = User.objects.get_or_create(
+                email=email,
+                defaults={
+                    "full_name": name,
+                    "auth_provider": AuthProvider.META,
+                    "is_verified": True,
+                }
+            )
+
+            if not created:
+                if user.auth_provider != AuthProvider.META:
+                    user.auth_provider = AuthProvider.META
+                    user.is_verified = True
+                    user.save(update_fields=["auth_provider", "is_verified"])
+
         except Exception as e:
             traceback.print_exc()
-            return Response({"detail": "Error creating or retrieving user", "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"detail": "Error creating or retrieving user", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-        # Issue JWT tokens
-        refresh = RefreshToken.for_user(user)
-        access_token_jwt = str(refresh.access_token)
-        refresh_token_jwt = str(refresh)
+        # Step 4: Generate JWT tokens
+        access_token_jwt, refresh_token_jwt = generate_jwt_token(user)
 
-        # Set refresh token cookie
-        cookie_max_age = 30 * 24 * 60 * 60 if remember else 7 * 24 * 60 * 60
+        serializer = UserSerializer(user)
+
         response_data = {
-            "user": UserSerializer(user).data,
+            "user": serializer.data,
             "access": access_token_jwt,
         }
+
         response = Response(response_data, status=status.HTTP_200_OK)
+
+        # Step 5: Set refresh cookie
+        cookie_max_age = 30 * 24 * 60 * 60 if remember else 7 * 24 * 60 * 60
+
         response.set_cookie(
             key="refresh_token",
             value=refresh_token_jwt,
             httponly=True,
-            secure=True, 
-            samesite="None",
+            secure=True,
+            samesite="Lax",
             max_age=cookie_max_age,
         )
 
         return response
-
 
 # REGISTER USER (Manual Signup)
 class RegisterSendOTPAPIView(APIView):

@@ -150,11 +150,21 @@ RAZORPAY_WEBHOOK_SECRET = os.getenv("RAZORPAY_WEBHOOK_SECRET")
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 
+FACEBOOK_APP_ID = os.getenv("FACEBOOK_APP_ID")
+FACEBOOK_APP_SECRET = os.getenv("FACEBOOK_APP_SECRET")
+
 SOCIALACCOUNT_PROVIDERS = {
     "google": {
         "APP": {
             "client_id": GOOGLE_CLIENT_ID,
             "secret": GOOGLE_CLIENT_SECRET,
+            "key": "",
+        }
+    },
+    "facebook":{
+        "APP":{
+            "client_id": FACEBOOK_APP_ID,
+            "secret": FACEBOOK_APP_SECRET,
             "key": "",
         }
     }
