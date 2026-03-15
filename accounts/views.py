@@ -1,5 +1,9 @@
 import traceback
 import requests
+import logging
+from django.contrib.auth import get_user_model
+
+logger = logging.getLogger(__name__)
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions, viewsets, mixins
@@ -152,32 +156,33 @@ class RefreshFromCookieAPIView(APIView):
     permission_classes = (permissions.AllowAny,)
 
     def post(self, request):
+        logger.info("==== REFRESH COOKIE ENDPOINT HIT ====")
 
-        print("==== REFRESH COOKIE ENDPOINT HIT ====")
+        # --------------------------------------------------
+        # 1. Read cookie
+        # --------------------------------------------------
+        refresh_token = request.COOKIES.get("refresh_token")
+        
+        # Mask the token for logging security
+        masked_token = f"{refresh_token[:10]}...{refresh_token[-5:]}" if refresh_token and len(refresh_token) > 15 else "None"
+        logger.info(f"Refresh token from cookie: {masked_token}")
+
+        if not refresh_token:
+            logger.warning("No refresh token cookie found in request.")
+            return Response(
+                {"detail": "No refresh token cookie."},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
 
         try:
-            # --------------------------------------------------
-            # 1. Read cookie
-            # --------------------------------------------------
-            refresh_token = request.COOKIES.get("refresh_token")
-            print("Refresh token from cookie:", refresh_token)
-
-            if not refresh_token:
-                print("ERROR: No refresh token cookie found")
-                return Response(
-                    {"detail": "No refresh token cookie."},
-                    status=status.HTTP_401_UNAUTHORIZED
-                )
-
             # --------------------------------------------------
             # 2. Parse token
             # --------------------------------------------------
             try:
                 refresh = RefreshToken(refresh_token)
-                print("Refresh token parsed successfully")
+                logger.info("Refresh token parsed successfully.")
             except TokenError as e:
-                print("ERROR: TokenError while parsing refresh token:", str(e))
-                # logger.exception("Refresh token parsing failed")
+                logger.warning(f"Invalid or expired refresh token presented: {str(e)}")
                 return Response(
                     {"detail": "Invalid refresh token."},
                     status=status.HTTP_401_UNAUTHORIZED
@@ -187,49 +192,65 @@ class RefreshFromCookieAPIView(APIView):
             # 3. Extract user
             # --------------------------------------------------
             user_id = refresh.access_token.payload.get("user_id")
-            print("Extracted user_id:", user_id)
-
+            
             if not user_id:
-                print("ERROR: user_id missing in token payload")
+                logger.error("Token payload missing user_id.")
                 return Response(
                     {"detail": "Invalid token payload."},
                     status=status.HTTP_401_UNAUTHORIZED
                 )
 
-            # --------------------------------------------------
-            # 4. Create new access token
-            # --------------------------------------------------
-            new_access = str(refresh.access_token)
-            print("New access token generated")
+            User = get_user_model()
+            try:
+                user = User.objects.get(id=user_id)
+                logger.info(f"User {user_id} looked up successfully.")
+            except User.DoesNotExist:
+                logger.warning(f"User with id {user_id} not found during token refresh.")
+                return Response(
+                    {"detail": "User not found."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            if not user.is_active:
+                logger.warning(f"Inactive user {user_id} attempted to refresh token.")
+                return Response(
+                    {"detail": "User account is disabled."},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
 
             # --------------------------------------------------
-            # 5. Rotate refresh token
+            # 4. Rotate tokens & Blacklist
             # --------------------------------------------------
             try:
+                # Assuming BLACKLIST_AFTER_ROTATION is True in settings
                 refresh.blacklist()
-                print("Old refresh token blacklisted")
+                logger.info("Old refresh token successfully blacklisted.")
+            except AttributeError:
+                # Blacklist app might not be installed
+                pass
             except Exception as e:
-                print("WARNING: Blacklist failed:", str(e))
-                # logger.exception("Refresh token blacklist failed")
+                logger.warning(f"Failed to blacklist old refresh token: {str(e)}")
 
             try:
-                new_refresh = RefreshToken.for_user_id(user_id)
-                print("New refresh token created")
+                # Standard SimpleJWT generator for a given user model instance
+                new_refresh = RefreshToken.for_user(user)
+                new_access = str(new_refresh.access_token)
+                logger.info("New refresh and access tokens created.")
             except Exception as e:
-                print("ERROR: Failed to create new refresh token:", str(e))
-                # logger.exception("New refresh creation failed")
-                raise
+                logger.exception(f"Failed to generate new tokens for user {user_id}: {str(e)}")
+                raise  # Let the outer generic try-except catch this 500
 
             # --------------------------------------------------
-            # 6. Build response
+            # 5. Build response
             # --------------------------------------------------
             response = Response(
                 {"access": new_access},
                 status=status.HTTP_200_OK
             )
 
-            cookie_max_age = 7 * 24 * 60 * 60  # 7 days
-
+            # 7 Days (match settings)
+            cookie_max_age = 7 * 24 * 60 * 60  
+            
             response.set_cookie(
                 key="refresh_token",
                 value=str(new_refresh),
@@ -239,14 +260,11 @@ class RefreshFromCookieAPIView(APIView):
                 max_age=cookie_max_age,
             )
 
-            print("Refresh cookie updated successfully")
-
+            logger.info("Refresh cookie updated successfully and returned to client.")
             return response
 
         except Exception as e:
-            print("CRITICAL ERROR in RefreshFromCookieAPIView:", str(e))
-            # logger.exception("Unexpected error during refresh token flow")
-
+            logger.exception("CRITICAL ERROR in RefreshFromCookieAPIView")
             return Response(
                 {
                     "detail": "Internal server error",
