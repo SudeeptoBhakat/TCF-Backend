@@ -116,26 +116,120 @@ class GoogleLoginAPIView(APIView):
         return response
 
 
+# class RefreshFromCookieAPIView(APIView):
+#     permission_classes = (permissions.AllowAny,)
+
+#     def post(self, request):
+#         refresh_token = request.COOKIES.get("refresh_token")
+#         if not refresh_token:
+#             return Response({"detail": "No refresh token cookie."}, status=status.HTTP_401_UNAUTHORIZED)
+#         try:
+#             refresh = RefreshToken(refresh_token)
+            
+#             # optionally rotate:
+#             new_access = str(refresh.access_token)
+            
+#             # ROTATE_REFRESH_TOKENS=True: blacklist old and create new
+#             refresh.blacklist()
+#             new_refresh = RefreshToken.for_user(refresh.access_token.payload.get('user_id'))
+            
+#             response = Response({"access": new_access}, status=status.HTTP_200_OK)
+            
+#             cookie_max_age = 7 * 24 * 60 * 60  # 7 days
+#             response.set_cookie(
+#                 key="refresh_token",
+#                 value=str(new_refresh),
+#                 httponly=True,
+#                 secure=True,
+#                 samesite="None",
+#                 max_age=cookie_max_age,
+#             )
+#             return response
+            
+#         except TokenError:
+#             return Response({"detail": "Invalid refresh token."}, status=status.HTTP_401_UNAUTHORIZED)
 class RefreshFromCookieAPIView(APIView):
     permission_classes = (permissions.AllowAny,)
 
     def post(self, request):
-        refresh_token = request.COOKIES.get("refresh_token")
-        if not refresh_token:
-            return Response({"detail": "No refresh token cookie."}, status=status.HTTP_401_UNAUTHORIZED)
+
+        print("==== REFRESH COOKIE ENDPOINT HIT ====")
+
         try:
-            refresh = RefreshToken(refresh_token)
-            
-            # optionally rotate:
+            # --------------------------------------------------
+            # 1. Read cookie
+            # --------------------------------------------------
+            refresh_token = request.COOKIES.get("refresh_token")
+            print("Refresh token from cookie:", refresh_token)
+
+            if not refresh_token:
+                print("ERROR: No refresh token cookie found")
+                return Response(
+                    {"detail": "No refresh token cookie."},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+
+            # --------------------------------------------------
+            # 2. Parse token
+            # --------------------------------------------------
+            try:
+                refresh = RefreshToken(refresh_token)
+                print("Refresh token parsed successfully")
+            except TokenError as e:
+                print("ERROR: TokenError while parsing refresh token:", str(e))
+                # logger.exception("Refresh token parsing failed")
+                return Response(
+                    {"detail": "Invalid refresh token."},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+
+            # --------------------------------------------------
+            # 3. Extract user
+            # --------------------------------------------------
+            user_id = refresh.access_token.payload.get("user_id")
+            print("Extracted user_id:", user_id)
+
+            if not user_id:
+                print("ERROR: user_id missing in token payload")
+                return Response(
+                    {"detail": "Invalid token payload."},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+
+            # --------------------------------------------------
+            # 4. Create new access token
+            # --------------------------------------------------
             new_access = str(refresh.access_token)
-            
-            # ROTATE_REFRESH_TOKENS=True: blacklist old and create new
-            refresh.blacklist()
-            new_refresh = RefreshToken.for_user(refresh.access_token.payload.get('user_id'))
-            
-            response = Response({"access": new_access}, status=status.HTTP_200_OK)
-            
+            print("New access token generated")
+
+            # --------------------------------------------------
+            # 5. Rotate refresh token
+            # --------------------------------------------------
+            try:
+                refresh.blacklist()
+                print("Old refresh token blacklisted")
+            except Exception as e:
+                print("WARNING: Blacklist failed:", str(e))
+                # logger.exception("Refresh token blacklist failed")
+
+            try:
+                new_refresh = RefreshToken.for_user_id(user_id)
+                print("New refresh token created")
+            except Exception as e:
+                print("ERROR: Failed to create new refresh token:", str(e))
+                # logger.exception("New refresh creation failed")
+                raise
+
+            # --------------------------------------------------
+            # 6. Build response
+            # --------------------------------------------------
+            response = Response(
+                {"access": new_access},
+                status=status.HTTP_200_OK
+            )
+
             cookie_max_age = 7 * 24 * 60 * 60  # 7 days
+
             response.set_cookie(
                 key="refresh_token",
                 value=str(new_refresh),
@@ -144,11 +238,22 @@ class RefreshFromCookieAPIView(APIView):
                 samesite="None",
                 max_age=cookie_max_age,
             )
-            return response
-            
-        except TokenError:
-            return Response({"detail": "Invalid refresh token."}, status=status.HTTP_401_UNAUTHORIZED)
 
+            print("Refresh cookie updated successfully")
+
+            return response
+
+        except Exception as e:
+            print("CRITICAL ERROR in RefreshFromCookieAPIView:", str(e))
+            # logger.exception("Unexpected error during refresh token flow")
+
+            return Response(
+                {
+                    "detail": "Internal server error",
+                    "error": str(e)
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class CurrentUserAPIView(APIView):
     permission_classes = (IsAuthenticated,)
