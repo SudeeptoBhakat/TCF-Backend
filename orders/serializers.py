@@ -384,6 +384,12 @@ class OrderSerializer(serializers.ModelSerializer):
             sku_obj.stock_qty = sku_obj.stock_qty - qty
             sku_obj.save(update_fields=["stock_qty", "updated_at"])
 
+            # Enrich tax_details with purity snapshot (for invoice PDF)
+            if sku_obj.commodity_variant:
+                tax_details["purity"] = sku_obj.commodity_variant.name or ""
+            else:
+                tax_details["purity"] = ""
+
             # Create order item (snapshot)
             product_name = item.get("product_name") or sku_obj.product.name
             OrderItem.objects.create(
@@ -477,6 +483,12 @@ class OrderSerializer(serializers.ModelSerializer):
                 # decrement stock
                 sku_obj.stock_qty = sku_obj.stock_qty - qty
                 sku_obj.save(update_fields=["stock_qty", "updated_at"])
+
+                # Enrich tax_details with purity snapshot (for invoice PDF)
+                if sku_obj.commodity_variant:
+                    tax_details["purity"] = sku_obj.commodity_variant.name or ""
+                else:
+                    tax_details["purity"] = ""
 
                 # create OrderItem
                 product_name = item.get("product_name") or sku_obj.product.name
