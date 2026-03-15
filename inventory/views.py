@@ -263,3 +263,56 @@ class ProductSearchAPIView(APIView):
             "total_products": len(product_serializer.data),
             "total_categories": len(category_serializer.data),
         }, status=status.HTTP_200_OK)
+
+
+# =====================================================================
+# COMMODITY RATES WIDGET API
+# =====================================================================
+class CurrentCommodityRatesAPIView(APIView):
+    """
+    Returns the latest active rate for each CommodityVariant.
+    Used for the globally visible floating commodity rates frontend widget.
+    Includes proper error handling.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        try:
+            # Fetch all variants and prefetch their rates, ordered by effective_date descending
+            variants = CommodityVariant.objects.select_related("commodity").prefetch_related(
+                Prefetch(
+                    "rates",
+                    queryset=CommodityRate.objects.filter(is_active=True).order_by("-effective_date"),
+                    to_attr="latest_rates"
+                )
+            )
+
+            rates_data = []
+            for variant in variants:
+                if hasattr(variant, 'latest_rates') and variant.latest_rates:
+                    latest_rate = variant.latest_rates[0]
+                    rates_data.append({
+                        "id": str(variant.id),
+                        "commodity_name": variant.commodity.name,
+                        "variant_name": variant.name,
+                        "code": variant.code,
+                        "unit": variant.unit,
+                        "unit_price": float(latest_rate.unit_price),
+                        "effective_date": latest_rate.effective_date.isoformat(),
+                    })
+            
+            if not rates_data:
+                return Response({
+                    "rates": [],
+                    "message": "No active commodity rates found."
+                }, status=status.HTTP_404_NOT_FOUND)
+
+            return Response({
+                "rates": rates_data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                "error": "Failed to fetch commodity rates.",
+                "details": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
