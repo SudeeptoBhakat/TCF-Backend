@@ -155,21 +155,18 @@ class LogoutAPIView(APIView):
         res.delete_cookie(
             key="access_token",
             path="/",
-            domain=settings.SESSION_COOKIE_DOMAIN,
             samesite="None",
             secure=True,
         )
         res.delete_cookie(
             key="refresh_token",
             path="/",
-            domain=settings.SESSION_COOKIE_DOMAIN,
             samesite="None",
             secure=True,
         )
         res.delete_cookie(
             key="sessionid",
             path="/",
-            domain=settings.SESSION_COOKIE_DOMAIN,
             samesite="None",
             secure=True,
         )
