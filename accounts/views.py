@@ -151,21 +151,27 @@ class LogoutAPIView(APIView):
             status=status.HTTP_200_OK
         )
 
-        # ❗ Delete cookies (ONLY allowed params)
+        # ❗ Delete cookies (must match login parameters exactly)
         res.delete_cookie(
             key="access_token",
             path="/",
-            samesite="Lax",
+            domain=settings.SESSION_COOKIE_DOMAIN,
+            samesite="None",
+            secure=True,
         )
         res.delete_cookie(
             key="refresh_token",
             path="/",
-            samesite="Lax",
+            domain=settings.SESSION_COOKIE_DOMAIN,
+            samesite="None",
+            secure=True,
         )
         res.delete_cookie(
             key="sessionid",
             path="/",
-            samesite="Lax",
+            domain=settings.SESSION_COOKIE_DOMAIN,
+            samesite="None",
+            secure=True,
         )
 
         return res

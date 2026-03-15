@@ -6,8 +6,9 @@ from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
 from django.db.models import Prefetch, Q
 from rest_framework.pagination import PageNumberPagination
-from .models import ProductCategory, Product, ProductSKU, ProductMedia, SKUAttributeOption, CommodityVariant
+from .models import ProductCategory, Product, ProductSKU, ProductMedia, SKUAttributeOption, CommodityVariant, CommodityRate
 from .serializers import ProductCategoryListSerilizer, ProductListSerializer, ProductSearchSerializer
+from rest_framework.permissions import AllowAny
 
 # PRODUCT CATAGORY LSIT
 class CategoryListAPIView(APIView):
