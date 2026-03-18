@@ -1,0 +1,71 @@
+name: CodeQL Advanced Analysis
+
+on:
+  push:
+    branches: [ "main", "master", "develop" ]
+  pull_request:
+    branches: [ "main", "master", "develop" ]
+  schedule:
+    # Runs at 08:00 UTC every Monday
+    - cron: '0 8 * * 1'
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+
+    permissions:
+      # Required for CodeQL to read source code
+      contents: read
+      # Required to upload CodeQL results to GitHub
+      security-events: write
+      # Required for private repos
+      actions: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ── Add or remove languages to match your e-commerce stack ──
+          # - language: javascript-typescript
+          #   build-mode: none
+          - language: python
+            build-mode: none
+          # Uncomment if you use Java / Kotlin (e.g. Spring Boot backend)
+          # - language: java-kotlin
+          #   build-mode: autobuild
+          # Uncomment if you use C# (.NET backend)
+          # - language: csharp
+          #   build-mode: autobuild
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Initialize CodeQL (v4) ─────────────────────────────────────
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          # Extend with security-and-quality suite for e-commerce apps
+          queries: security-and-quality
+          # Optional: point to a custom config file
+          # config-file: .github/codeql/codeql-config.yml
+
+      # ── 3. Auto-build (only for compiled languages) ───────────────────
+      - if: matrix.build-mode == 'autobuild'
+        name: Autobuild
+        uses: github/codeql-action/autobuild@v4
+
+      # ── 4. Perform Analysis ───────────────────────────────────────────
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{ matrix.language }}"
+          # Upload SARIF results to the Security tab
+          upload: always
+          # Fail the workflow if any HIGH or CRITICAL issues are found
+          # Remove or set to 'none' if you prefer a non-blocking scan
+          # output: sarif-results
