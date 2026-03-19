@@ -1,4 +1,8 @@
-from django.contrib import admin
+import logging
+from django.contrib import admin, messages
+from django.db import transaction
+from django.utils.html import format_html
+
 from .models import (
     ProductCategory, Product, ProductMedia,
     ProductAttribute, ProductAttributeOption, ProductAttributeAssignment,
@@ -6,17 +10,29 @@ from .models import (
     Commodity, CommodityVariant, CommodityRate
 )
 from .admin_forms import ProductMediaMultiUploadForm
-from .widgets import MultiFileInput
 
-# ------------------------------------------------
+logger = logging.getLogger(__name__)
+
+
+# ============================================================
 # Inline Admins
-# ------------------------------------------------
+# ============================================================
 
 class ProductMediaInline(admin.TabularInline):
     model = ProductMedia
     extra = 1
-    fields = ['media', 'sku', 'sort_order']
+    fields = ['media_file', 'sku', 'sort_order', 'thumbnail_preview']
+    readonly_fields = ['thumbnail_preview']
     ordering = ['sort_order']
+
+    def thumbnail_preview(self, obj):
+        if obj.media_file:
+            return format_html(
+                '<img src="{}" width="60" style="border-radius:5px;object-fit:cover;" />',
+                obj.media_file.url
+            )
+        return "—"
+    thumbnail_preview.short_description = "Preview"
 
 
 class SKUAttributeOptionInline(admin.TabularInline):
@@ -36,9 +52,9 @@ class ProductAttributeAssignmentInline(admin.TabularInline):
     autocomplete_fields = ['attribute']
 
 
-# ------------------------------------------------
+# ============================================================
 # Category Admin
-# ------------------------------------------------
+# ============================================================
 
 @admin.register(ProductCategory)
 class ProductCategoryAdmin(admin.ModelAdmin):
@@ -49,9 +65,9 @@ class ProductCategoryAdmin(admin.ModelAdmin):
     list_per_page = 20
 
 
-# ------------------------------------------------
+# ============================================================
 # Product Admin
-# ------------------------------------------------
+# ============================================================
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
@@ -76,73 +92,172 @@ class ProductAdmin(admin.ModelAdmin):
     inlines = [ProductMediaInline, ProductAttributeAssignmentInline]
 
 
-# ------------------------------------------------
-# Product Media Admin
-# ------------------------------------------------
+# ============================================================
+# Product Media Admin — Multi-Upload
+# ============================================================
+
 @admin.register(ProductMedia)
 class ProductMediaAdmin(admin.ModelAdmin):
+    """
+    Admin view for ProductMedia with professional multi-image upload.
+
+    HOW IT WORKS:
+    - The custom form (ProductMediaMultiUploadForm) renders a multi-file
+      input under the key 'upload_images'.
+    - MultipleImageField.clean() validates each file (size + Pillow verify).
+    - save_model() iterates over all validated files and creates one
+      ProductMedia DB row per file, uploading the image to the media server.
+    - The entire batch is wrapped in a transaction so it's all-or-nothing,
+      but per-file failures show a warning without aborting the rest.
+    """
+
     form = ProductMediaMultiUploadForm
 
-    list_display = ('thumbnail', 'product', 'sku', 'sort_order')
-    list_filter = ('product', 'sku')
-    search_fields = ('product__name',)
+    list_display = ('thumbnail_preview', 'product', 'sku', 'sort_order', 'created_at')
+    list_filter = ('product',)
+    search_fields = ('product__name', 'sku__sku_code')
+    list_per_page = 30
+    ordering = ['product', 'sort_order']
 
-    # Enable multiple file selection
-    # def get_form(self, request, obj=None, **kwargs):
-    #     form = super().get_form(request, obj, **kwargs)
-    #     if 'upload_files' in form.base_fields:
-    #         form.base_fields['upload_files'].widget.attrs.update({'multiple': True})
-    #     return form
+    fieldsets = (
+        ("Product", {
+            "fields": ("product", "sku"),
+            "description": (
+                "Select the product this image belongs to. "
+                "Optionally assign it to a specific SKU variant."
+            ),
+        }),
+        ("Upload Images", {
+            "fields": ("upload_images", "sort_order"),
+            "description": (
+                "<div class='upload-help-text'>"
+                "📁 Drag &amp; drop images here or click to browse. "
+                "You can select <strong>multiple files</strong> at once. "
+                "Supported: JPG, PNG, WEBP, GIF — max 10 MB each."
+                "</div>"
+            ),
+        }),
+    )
 
-    # # FORCE MULTIPART ENCODING
-    # def render_change_form(self, request, context, *args, **kwargs):
-    #     if "adminform" in context:
-    #         context["adminform"].form.enctype = "multipart/form-data"
-    #     return super().render_change_form(request, context, *args, **kwargs)
-
-    # # CRITICAL — Django admin won't create multipart form unless you override this
-    # def add_view(self, request, form_url="", extra_context=None):
-    #     request.META['CONTENT_TYPE'] = "multipart/form-data"
-    #     return super().add_view(request, form_url, extra_context)
-
-    # def change_view(self, request, object_id, form_url="", extra_context=None):
-    #     request.META['CONTENT_TYPE'] = "multipart/form-data"
-    #     return super().change_view(request, object_id, form_url, extra_context)
-    
-    # def get_changeform_initial_data(self, request):
-    #     request._upload_handlers = None  # force file upload handlers
-    #     return super().get_changeform_initial_data(request)
-
-    # def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
-    #     request.META['CONTENT_TYPE'] = "multipart/form-data"
-    #     return super().changeform_view(request, object_id, form_url, extra_context)
+    readonly_fields = []
 
     class Media:
         css = {"all": ("admin/product_media.css",)}
         js = ("admin/product_media.js",)
 
-    # Save multiple uploaded files
-    def save_model(self, request, obj, form, change):
-        files = request.FILES.getlist('upload_files')
+    # ── List view thumbnail ──────────────────────────────────────────────────
 
-        if files:
-            base_sort = form.cleaned_data.get('sort_order', 0)
-            for i, f in enumerate(files):
-                ProductMedia.objects.create(
-                    product=form.cleaned_data['product'],
-                    sku=form.cleaned_data['sku'],
-                    media_file=f,
-                    sort_order=base_sort + i,
-                    media={"type": "image", "role": "gallery"}
-                )
+    def thumbnail_preview(self, obj):
+        if obj.media_file:
+            return format_html(
+                '<img src="{}" width="70" height="70" '
+                'style="border-radius:6px;object-fit:cover;border:1px solid #e0e0e0;" />',
+                obj.media_file.url
+            )
+        return format_html('<span style="color:#aaa;">No image</span>')
+
+    thumbnail_preview.short_description = "Preview"
+    thumbnail_preview.allow_tags = True
+
+    # ── Core save logic ──────────────────────────────────────────────────────
+
+    def save_model(self, request, obj, form, change):
+        """
+        Handle multi-image upload.
+
+        Scenarios handled:
+        1. Multiple files selected → create one ProductMedia per file (batch).
+        2. Single file (or zero files) in the multi-input → fall through to
+           standard Django save (handles the change/edit case gracefully).
+        3. Per-file errors → show admin warning, skip that file, continue.
+        4. Full batch wrapped in transaction.atomic() so DB stays consistent.
+        """
+        files = form.cleaned_data.get('upload_images', [])
+
+        if not files:
+            # ── No new uploads — standard save (edit existing record) ──────
+            super().save_model(request, obj, form, change)
             return
 
-        super().save_model(request, obj, form, change)
+        product = form.cleaned_data.get('product')
+        sku = form.cleaned_data.get('sku')
+        base_sort = form.cleaned_data.get('sort_order', 0) or 0
+
+        saved_count = 0
+        failed_files = []
+
+        try:
+            with transaction.atomic():
+                for i, upload in enumerate(files):
+                    try:
+                        media_obj = ProductMedia(
+                            product=product,
+                            sku=sku,
+                            sort_order=base_sort + i,
+                            media={
+                                "type": "image",
+                                "role": "gallery",
+                                "original_name": upload.name,
+                            },
+                        )
+                        # Assign the file to the ImageField — Django storage
+                        # backend will handle the actual disk/S3 save on commit.
+                        media_obj.media_file.save(
+                            upload.name,
+                            upload,
+                            save=False   # don't trigger another .save() yet
+                        )
+                        media_obj.save()
+                        saved_count += 1
+
+                        logger.info(
+                            "ProductMedia created | product=%s sku=%s file=%s sort=%d",
+                            product.name,
+                            sku.sku_code if sku else "—",
+                            upload.name,
+                            base_sort + i,
+                        )
+
+                    except Exception as file_err:
+                        failed_files.append(upload.name)
+                        logger.error(
+                            "Failed to save ProductMedia for file '%s': %s",
+                            upload.name,
+                            str(file_err),
+                            exc_info=True,
+                        )
+                        # Re-raise so the atomic block rolls back everything
+                        raise
+
+        except Exception:
+            # Transaction rolled back — nothing was saved
+            self.message_user(
+                request,
+                f"Upload failed. No images were saved. "
+                f"Failed file(s): {', '.join(failed_files)}. "
+                f"Check the server logs for details.",
+                level=messages.ERROR,
+            )
+            return
+
+        # ── Success messages ─────────────────────────────────────────────────
+        if saved_count == 1:
+            self.message_user(
+                request,
+                f"✅ 1 image uploaded successfully for product «{product.name}».",
+                level=messages.SUCCESS,
+            )
+        else:
+            self.message_user(
+                request,
+                f"✅ {saved_count} images uploaded successfully for product «{product.name}».",
+                level=messages.SUCCESS,
+            )
 
 
-# ------------------------------------------------
+# ============================================================
 # Product Attribute Admin
-# ------------------------------------------------
+# ============================================================
 
 @admin.register(ProductAttribute)
 class ProductAttributeAdmin(admin.ModelAdmin):
@@ -161,9 +276,9 @@ class ProductAttributeOptionAdmin(admin.ModelAdmin):
     prepopulated_fields = {'value_slug': ('value',)}
 
 
-# ------------------------------------------------
+# ============================================================
 # Product SKU Admin
-# ------------------------------------------------
+# ============================================================
 
 @admin.register(ProductSKU)
 class ProductSKUAdmin(admin.ModelAdmin):
@@ -182,7 +297,6 @@ class ProductSKUAdmin(admin.ModelAdmin):
     autocomplete_fields = ['product', 'commodity_variant']
     inlines = [SKUAttributeOptionInline]
 
-    # ----- Form Layout -----
     fieldsets = (
         ("Basic Information", {
             "fields": (
@@ -196,7 +310,6 @@ class ProductSKUAdmin(admin.ModelAdmin):
                 "is_bestseller",
             )
         }),
-
         ("Pricing", {
             "fields": (
                 "sell_by_fixed_price",
@@ -213,25 +326,22 @@ class ProductSKUAdmin(admin.ModelAdmin):
                 "then <b>Fixed Price</b> overrides calculated price."
             )
         }),
-
         ("Stock Information", {
             "fields": ("stock_qty",)
         }),
     )
 
-    # Make admin cleaner
     readonly_fields = ()
 
     class Media:
-        """Optional: Slight UI improvement for admin spacing."""
         css = {
             "all": ("admin/css/custom_admin.css",)
         }
 
 
-# ------------------------------------------------
+# ============================================================
 # Commodity Admin
-# ------------------------------------------------
+# ============================================================
 
 @admin.register(Commodity)
 class CommodityAdmin(admin.ModelAdmin):
@@ -248,7 +358,6 @@ class CommodityVariantAdmin(admin.ModelAdmin):
     list_filter = ('commodity',)
     autocomplete_fields = ['commodity']
 
-    # Live preview help text
     fieldsets = (
         ("Variant Information", {
             "fields": ("commodity", "name", "code", "unit"),
@@ -272,7 +381,12 @@ class CommodityRateAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ("Rate Information", {
-            "fields": ("variant", "unit_price", 'cgst_percent', 'sgst_percent', 'ratti_multiplier','wastage_percent', "effective_date", "is_active"),
+            "fields": (
+                "variant", "unit_price",
+                'cgst_percent', 'sgst_percent',
+                'ratti_multiplier', 'wastage_percent',
+                "effective_date", "is_active"
+            ),
             "description": """
                 <style>
                     .rate-box {padding:12px;margin-top:10px;background:#eef8ff;border-left:4px solid #007bff;border-radius:5px;}
@@ -281,7 +395,7 @@ class CommodityRateAdmin(admin.ModelAdmin):
 
                 <div class='rate-box'>
                     💡 <b>Auto Update Rule:</b><br>
-                    When you change the unit price here, <b>all ProductSKU linked to this variant 
+                    When you change the unit price here, <b>all ProductSKU linked to this variant
                     will automatically update their pricing</b> unless <i>Sell by fixed price</i> is enabled.
                 </div>
 
@@ -300,11 +414,10 @@ class CommodityRateAdmin(admin.ModelAdmin):
 
     def save_model(self, request, obj, form, change):
         """
-        Save the rate. 
+        Save the rate.
         Note: The post_save signal in models.py handles the SKU price updates automatically.
         """
         super().save_model(request, obj, form, change)
-
 
     class Media:
         js = ("admin/live_rate_calculator.js",)
