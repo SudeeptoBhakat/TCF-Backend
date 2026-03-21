@@ -12,8 +12,7 @@ import uuid
 import logging
 
 DEC2 = Decimal("0.01")
-from orders.utils import calculate_sku_price, get_latest_rate_for_variant
-
+from inventory.utils import calculate_sku_price, get_latest_rate_for_variant
 logger = logging.getLogger(__name__)
 def quantize_money(value: Decimal) -> Decimal:
     return value.quantize(DEC2, rounding=ROUND_HALF_UP)
@@ -293,28 +292,6 @@ class CommodityRate(models.Model):
         return f"{self.variant} - {self.unit_price} on {self.effective_date}"
 
 
-# ---------------------------------------------------------
-# SIGNAL → Auto Update SKU Prices When Commodity Rate Changes
-# ---------------------------------------------------------
-@receiver(post_save, sender=CommodityRate)
-def update_sku_prices_after_rate_change(sender, instance, created, **kwargs):
-
-    if not instance.is_active:
-        return
-
-    skus = ProductSKU.objects.filter(
-        commodity_variant=instance.variant,
-        sell_by_fixed_price=False,
-        is_active=True
-    )
-
-    updated_skus = []
-    for sku in skus:
-        sku.recalculate_price_from_rate(instance)
-        updated_skus.append(sku)
-
-    # prevent 1000 queries → turn into 1 query
-    ProductSKU.objects.bulk_update(updated_skus, ['price', 'updated_at'])
 
 
 
@@ -392,7 +369,7 @@ class ProductSKU(TimestampedModel):
             elif weight < 0:
                 raise ValidationError({"weight": "Invalid weight"})
                 
-            from orders.utils import get_latest_rate_for_variant
+            from inventory.utils import get_latest_rate_for_variant
             rate = get_latest_rate_for_variant(self.commodity_variant)
             if rate is None or rate.unit_price <= 0:
                 raise ValidationError({"commodity_variant": "Missing Commodity Rate"})
@@ -413,17 +390,24 @@ class ProductSKU(TimestampedModel):
             raise ValidationError({"stock_qty": "Stock cannot be negative"})
 
     def save(self, *args, **kwargs):
-        if not kwargs.get("update_fields"):
+        if not kwargs.get("update_fields") or "price" in kwargs.get("update_fields", []):
             if self.sell_by_fixed_price:
                 self.price = Decimal(str(self.fixed_price or 0))
             else:
-                try:
-                    breakdown = self.get_price_breakdown()
-                    self.price = Decimal(str(breakdown["final_price"]))
-                except Exception as e:
-                    logger.error(f"Error calculating base price for {self.sku_code}: {e}")
+                if not self.commodity_variant:
+                    logger.warning(f"No commodity variant for {self.sku_code}. Skipping price calculation.")
                     if self.price is None:
                         self.price = Decimal("0")
+                else:
+                    try:
+                        from inventory.utils import calculate_sku_price
+                        final_price, _ = calculate_sku_price(self)
+                        self.price = final_price
+                        logger.info(f"Auto-calculated price for {self.sku_code}: {self.price}")
+                    except Exception as e:
+                        logger.error(f"Failed to calculate price on save for {self.sku_code}: {str(e)}")
+                        if self.price is None:
+                            self.price = Decimal("0")
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -545,26 +529,7 @@ class ProductSKU(TimestampedModel):
             "final_price": float(quantize_money(final_price))
         }
 
-    def recalculate_price_from_rate(self, rate):
-        """
-        Recalculate SKU price based on commodity rate.
-        Supports both metal and stone pricing logic.
-        """
 
-        try:
-            breakdown = self.get_price_breakdown(rate=rate)
-            self.price = Decimal(str(breakdown["final_price"]))
-            self.save(update_fields=["price", "updated_at"])
-            logger.info(
-                f"""
-    PRICE CALCULATION SUCCESS
-    SKU : {self.sku_code}
-    FINAL PRICE : {self.price}
-    """
-            )
-        except Exception as e:
-            logger.error(f"Price calculation failed for SKU {self.sku_code}: {str(e)}", exc_info=True)
-            raise
 
     def decrement_stock(self, qty: int):
         """Safely decrement stock with locking."""
@@ -645,21 +610,27 @@ def update_sku_prices_after_rate_change(sender, instance, created, **kwargs):
         with transaction.atomic():
             failed_skus = []
             successful_skus = []
+            skus_to_update = []
+            
+            from inventory.utils import calculate_sku_price
 
             for sku in skus:
                 try:
-                    with transaction.atomic():
-                        logger.debug(f"[post_save Signal-{signal_id}] Processing SKU: {sku.sku_code}")
-                        sku.recalculate_price_from_rate(instance)
-                        successful_skus.append(sku.sku_code)
-                        logger.debug(f"  ✓ Updated {sku.sku_code}: ₹{sku.price}")
-
+                    final_price, _ = calculate_sku_price(sku, rate=instance)
+                    sku.price = final_price
+                    sku.updated_at = timezone.now()
+                    skus_to_update.append(sku)
+                    successful_skus.append(sku.sku_code)
+                    logger.debug(f"  ✓ Calculated {sku.sku_code}: ₹{sku.price}")
                 except Exception as sku_err:
                     logger.error(
-                        f"[post_save Signal-{signal_id}] Failed to update SKU {sku.sku_code}: {str(sku_err)}. Transaction rolled back.",
+                        f"[post_save Signal-{signal_id}] Failed to calculate SKU {sku.sku_code}: {str(sku_err)}",
                         exc_info=True
                     )
                     failed_skus.append((sku.sku_code, str(sku_err)))
+            
+            if skus_to_update:
+                ProductSKU.objects.bulk_update(skus_to_update, ['price', 'updated_at'])
 
         logger.info(
             f"[post_save Signal-{signal_id}] ✓ Signal complete | "
