@@ -36,7 +36,7 @@ class MultipleImageField(forms.Field):
         # Pass widget as keyword arg to forms.Field.__init__
         super().__init__(
             *args,
-            widget=MultipleFileInput(attrs={'class': 'multi-image-upload-input'}),
+            widget=MultipleFileInput(attrs={'class': 'multi-image-simple-input'}),
             **kwargs
         )
 

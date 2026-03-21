@@ -1,91 +1,58 @@
 /* ============================================================
-   Product Media Admin — Multi-Image Upload Styles
+   Product Media Admin — Simple Multi-Image Upload Styles
    ============================================================ */
 
-/* ── Upload zone wrapper ──────────────────────────────────── */
-.multi-image-upload-zone {
+/* ── The native file input ── */
+.multi-image-simple-input {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  background: #f8fafc;
+  border: 1px solid #cfd8dc;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+/* ── The Preview Box ── */
+.multi-image-preview-box {
+  margin-top: 15px;
+  padding: 15px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #fafafa;
+  min-height: 120px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 160px;
-  padding: 28px 20px;
-  border: 2px dashed #b0bec5;
-  border-radius: 10px;
-  background: #f8fafc;
-  cursor: pointer;
-  transition: border-color 0.2s ease, background 0.2s ease;
-  position: relative;
-  text-align: center;
 }
 
-.multi-image-upload-zone:hover,
-.multi-image-upload-zone.drag-over {
-  border-color: #1a73e8;
-  background: #e8f0fe;
-}
-
-.multi-image-upload-zone .upload-icon {
-  font-size: 42px;
-  line-height: 1;
-  margin-bottom: 10px;
-  pointer-events: none;
-}
-
-.multi-image-upload-zone .upload-label {
-  font-size: 14px;
-  color: #546e7a;
-  pointer-events: none;
-}
-
-.multi-image-upload-zone .upload-label strong {
-  color: #1a73e8;
-}
-
-/* ── Hide the real input, overlay the zone ────────────────── */
-.multi-image-upload-input {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  cursor: pointer;
-  z-index: 2;
-}
-
-/* ── File count badge ─────────────────────────────────────── */
-.upload-file-count {
-  margin-top: 8px;
-  font-size: 12px;
+.preview-box-header {
+  font-size: 13px;
   font-weight: 600;
-  color: #1a73e8;
-  min-height: 18px;
+  color: #455a64;
+  margin-bottom: 15px;
+  border-bottom: 1px solid #eeeeee;
+  padding-bottom: 8px;
 }
 
-/* ── Thumbnail strip ──────────────────────────────────────── */
+/* ── The Thumbnail Strip inside the Box ── */
 .upload-preview-strip {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 14px;
-  padding: 8px 0;
+  gap: 12px;
 }
 
 .upload-preview-item {
-  position: relative;
-  width: 90px;
-  height: 90px;
-  border-radius: 7px;
+  width: 100px;
+  height: 100px;
+  border-radius: 6px;
   overflow: hidden;
-  border: 2px solid #e0e0e0;
-  background: #fafafa;
-  transition: border-color 0.15s ease, transform 0.15s ease;
-  flex-shrink: 0;
-}
-
-.upload-preview-item:hover {
-  border-color: #1a73e8;
-  transform: scale(1.03);
+  border: 2px solid #cfd8dc;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .upload-preview-item img {
@@ -95,69 +62,10 @@
   display: block;
 }
 
-/* ── Remove button on each thumbnail ─────────────────────── */
-.upload-preview-remove {
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.65);
-  color: #fff;
-  border: none;
-  cursor: pointer;
+.preview-empty-text {
+  color: #90a4ae;
   font-size: 13px;
-  line-height: 20px;
+  font-style: italic;
   text-align: center;
-  padding: 0;
-  transition: background 0.15s ease;
-  z-index: 10;
-}
-
-.upload-preview-remove:hover {
-  background: #d32f2f;
-}
-
-/* ── File name tooltip ────────────────────────────────────── */
-.upload-preview-name {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: rgba(0,0,0,0.55);
-  color: #fff;
-  font-size: 9px;
-  padding: 2px 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* ── Help text box ────────────────────────────────────────── */
-.upload-help-text {
-  background: #fff8e1;
-  border-left: 4px solid #f9a825;
-  border-radius: 5px;
-  padding: 10px 14px;
-  font-size: 13px;
-  color: #5d4037;
-  margin-bottom: 10px;
-}
-
-/* ── Field row override to give the upload zone more room ─── */
-.field-upload_images .help,
-.field-upload_images p.help {
-  margin-top: 6px;
-  font-size: 12px;
-  color: #78909c;
-}
-
-/* ── Existing thumbnail in list display ────────────────────── */
-.field-thumbnail_preview img {
-  width: 70px;
-  height: 70px;
-  object-fit: cover;
-  border-radius: 5px;
-  border: 1px solid #e0e0e0;
+  margin-top: 20px;
 }

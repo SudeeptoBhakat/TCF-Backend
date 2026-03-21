@@ -120,30 +120,18 @@ class ProductMediaAdmin(admin.ModelAdmin):
     ordering = ['product', 'sort_order']
 
     fieldsets = (
-        ("Product", {
+        ("Product Assignment", {
             "fields": ("product", "sku"),
-            "description": (
-                "Select the product this image belongs to. "
-                "Optionally assign it to a specific SKU variant."
-            ),
+            "description": "Select the product and (optional) SKU for the images below.",
         }),
         ("Upload Images", {
-            "fields": ("upload_images", "sort_order"),
-            "description": (
-                "<div class='upload-help-text'>"
-                "&#128193; Drag &amp; drop images here or click to browse. "
-                "You can select <strong>multiple files</strong> at once. "
-                "Supported: JPG, PNG, WEBP, GIF &mdash; max 10 MB each."
-                "</div>"
-            ),
+            "fields": ("upload_images",),
+            "description": "Click 'Choose Files' to select one or multiple images.",
         }),
         ("Replace Existing Image", {
             "fields": ("media_file",),
             "classes": ("collapse",),
-            "description": (
-                "Only use this to <strong>replace</strong> the image on an existing record. "
-                "For new uploads, use the section above."
-            ),
+            "description": "Use this only when replacing an existing image.",
         }),
     )
 
