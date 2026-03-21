@@ -131,7 +131,7 @@ class ProductMediaMultiUploadForm(forms.ModelForm):
     class Meta:
         model = ProductMedia
         # Include media_file so existing records can be edited without re-upload
-        fields = ['product', 'sku', 'sort_order', 'media_file']
+        fields = ['product', 'sku', 'media_file']
         widgets = {
             # Hide the single-file picker — it is only used as a fallback when
             # editing an existing record. Users upload via upload_images instead.
@@ -161,12 +161,6 @@ class ProductMediaMultiUploadForm(forms.ModelForm):
             .order_by('product__name', 'sku_code')
         )
         self.fields['sku'].empty_label = '— No SKU (product-level image) —'
-
-        # Sort order
-        self.fields['sort_order'].initial = 0
-        self.fields['sort_order'].help_text = _(
-            'Images are sorted ascending. Batch uploads start here and increment by 1.'
-        )
 
         # media_file — only show if editing an existing object that has one
         obj = kwargs.get('instance')
