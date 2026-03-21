@@ -675,3 +675,62 @@ def update_sku_prices_after_rate_change(sender, instance, created, **kwargs):
             exc_info=True,
             extra={"rate_id": instance.id, "variant_id": instance.variant_id}
         )
+
+# =====================================================================
+# PRODUCT VIDEO
+# =====================================================================
+class ProductVideo(TimestampedModel):
+    """
+    Video links for products, boosting videos, or homepage featured videos.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="videos"
+    )
+    
+    video_url = models.URLField(max_length=500, help_text="Link to YouTube, Instagram, Facebook, etc.")
+    
+    PLATFORM_CHOICES = [
+        ("youtube", "YouTube"),
+        ("instagram", "Instagram"),
+        ("facebook", "Facebook"),
+        ("vimeo", "Vimeo"),
+        ("other", "Other"),
+    ]
+    platform = models.CharField(max_length=50, choices=PLATFORM_CHOICES, default="youtube")
+    
+    is_homepage_featured = models.BooleanField(
+        default=False,
+        help_text="Show this video on the home page."
+    )
+    is_boosting_video = models.BooleanField(
+        default=False,
+        help_text="Show this video on products that do not have their own specific videos."
+    )
+    
+    is_active = models.BooleanField(default=True)
+    
+    class Meta:
+        db_table = "product_videos"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["product"]),
+            models.Index(fields=["is_homepage_featured"]),
+            models.Index(fields=["is_boosting_video"]),
+        ]
+
+    def __str__(self):
+        if self.product:
+            desc = f"Video for {self.product.name}"
+        elif self.is_homepage_featured:
+            desc = "Homepage Featured Video"
+        elif self.is_boosting_video:
+            desc = "Boosting Video"
+        else:
+            desc = "Unassigned Video"
+        return f"{self.get_platform_display()} - {desc}"

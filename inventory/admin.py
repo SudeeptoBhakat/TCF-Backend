@@ -7,7 +7,7 @@ from .models import (
     ProductCategory, Product, ProductMedia,
     ProductAttribute, ProductAttributeOption, ProductAttributeAssignment,
     ProductSKU, SKUAttributeOption,
-    Commodity, CommodityVariant, CommodityRate
+    Commodity, CommodityVariant, CommodityRate, ProductVideo
 )
 from .admin_forms import ProductMediaMultiUploadForm
 
@@ -400,3 +400,44 @@ class CommodityRateAdmin(admin.ModelAdmin):
 
     class Media:
         js = ("admin/live_rate_calculator.js",)
+
+
+# ============================================================
+# Product Video Admin
+# ============================================================
+
+@admin.register(ProductVideo)
+class ProductVideoAdmin(admin.ModelAdmin):
+    list_display = (
+        'platform_icon', 'product', 'is_homepage_featured', 
+        'is_boosting_video', 'is_active', 'created_at'
+    )
+    list_filter = ('platform', 'is_homepage_featured', 'is_boosting_video', 'is_active')
+    search_fields = ('product__name', 'video_url')
+    autocomplete_fields = ['product']
+    
+    fieldsets = (
+        ("Video Source", {
+            "fields": ("video_url", "platform"),
+            "description": "Provide a link to the video (YouTube, Instagram, etc.). Do not upload video files directly."
+        }),
+        ("Placement Options", {
+            "fields": ("product", "is_homepage_featured", "is_boosting_video"),
+            "description": """
+                <ul>
+                <li><b>Product:</b> Show video only on this specific product's page.</li>
+                <li><b>Is boosting video:</b> Show this video as a fallback on products that don't have their own video.</li>
+                <li><b>Is homepage featured:</b> Pin this video to the homepage featuring section.</li>
+                </ul>
+            """
+        }),
+        ("Status", {
+            "fields": ("is_active",)
+        }),
+    )
+
+    def platform_icon(self, obj):
+        return format_html(
+            f'<b>{obj.get_platform_display()}</b>'
+        )
+    platform_icon.short_description = "Platform"

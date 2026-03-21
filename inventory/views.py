@@ -6,8 +6,8 @@ from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404
 from django.db.models import Prefetch, Q
 from rest_framework.pagination import PageNumberPagination
-from .models import ProductCategory, Product, ProductSKU, ProductMedia, SKUAttributeOption, CommodityVariant, CommodityRate
-from .serializers import ProductCategoryListSerilizer, ProductListSerializer, ProductSearchSerializer
+from .models import ProductCategory, Product, ProductSKU, ProductMedia, SKUAttributeOption, CommodityVariant, CommodityRate, ProductVideo
+from .serializers import ProductCategoryListSerilizer, ProductListSerializer, ProductSearchSerializer, ProductVideoSerializer
 from rest_framework.permissions import AllowAny
 
 # PRODUCT CATAGORY LSIT
@@ -49,6 +49,7 @@ class CategoryProductListAPIView(APIView):
             "category"
         ).prefetch_related(
             Prefetch("media", queryset=ProductMedia.objects.order_by("sort_order")),
+            Prefetch("videos", queryset=ProductVideo.objects.filter(is_active=True)),
             Prefetch(
                 "skus",
                 queryset=ProductSKU.objects.filter(is_active=True).select_related(
@@ -66,7 +67,10 @@ class CategoryProductListAPIView(APIView):
             )
         ).order_by("-created_at")
 
-        serializer = ProductListSerializer(products, many=True)
+        boosting_videos = list(ProductVideo.objects.filter(is_boosting_video=True, is_active=True))
+        request.boosting_videos = boosting_videos
+
+        serializer = ProductListSerializer(products, many=True, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -132,6 +136,9 @@ class ProductListAPIView(APIView):
         # ------------ PAGINATION ------------
         paginator = ProductPagination()
         paginated_products = paginator.paginate_queryset(queryset, request)
+        
+        boosting_videos = list(ProductVideo.objects.filter(is_boosting_video=True, is_active=True))
+        request.boosting_videos = boosting_videos
 
         serializer = ProductListSerializer(
             paginated_products,
@@ -182,8 +189,11 @@ class ProductDetailAPIView(APIView):
             ),
             **{lookup_field: identifier}
         )
+        
+        boosting_videos = list(ProductVideo.objects.filter(is_boosting_video=True, is_active=True))
+        request.boosting_videos = boosting_videos
 
-        serializer = ProductListSerializer(product)
+        serializer = ProductListSerializer(product, context={"request": request})
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -222,6 +232,7 @@ class ProductSearchAPIView(APIView):
                 "media",
                 queryset=ProductMedia.objects.order_by("sort_order")
             ),
+            Prefetch("videos", queryset=ProductVideo.objects.filter(is_active=True)),
             Prefetch(
                 "skus",
                 queryset=ProductSKU.objects.filter(is_active=True)
@@ -314,5 +325,25 @@ class CurrentCommodityRatesAPIView(APIView):
         except Exception as e:
             return Response({
                 "error": "Failed to fetch commodity rates.",
+                "details": str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# =====================================================================
+# HOMEPAGE VIDEOS API
+# =====================================================================
+class HomepageFeaturedVideoAPIView(APIView):
+    """
+    Returns the videos marked as homepage featured.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        try:
+            videos = ProductVideo.objects.filter(is_homepage_featured=True, is_active=True).order_by("-created_at")
+            serializer = ProductVideoSerializer(videos, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({
+                "error": "Failed to fetch homepage featured videos.",
                 "details": str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

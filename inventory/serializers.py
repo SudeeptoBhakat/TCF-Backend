@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ProductCategory, Product, ProductMedia, ProductSKU, SKUAttributeOption, ProductAttribute, ProductAttributeOption, CommodityVariant, CommodityRate
+from .models import ProductCategory, Product, ProductMedia, ProductSKU, SKUAttributeOption, ProductAttribute, ProductAttributeOption, CommodityVariant, CommodityRate, ProductVideo
 from orders.utils import calculate_sku_price
 
 class ProductCategoryListSerilizer(serializers.ModelSerializer):
@@ -140,10 +140,22 @@ class ProductSKUSerializer(serializers.ModelSerializer):
             }
 
 
+class ProductVideoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProductVideo
+        fields = [
+            "id",
+            "video_url",
+            "platform",
+            "is_homepage_featured",
+            "is_boosting_video"
+        ]
+
 class ProductListSerializer(serializers.ModelSerializer):
     category = serializers.CharField(source="category.name", default=None)
     media = ProductMediaSerializer(many=True)
     skus = ProductSKUSerializer(many=True)
+    videos = serializers.SerializerMethodField()
 
     class Meta:
         model = Product
@@ -158,7 +170,22 @@ class ProductListSerializer(serializers.ModelSerializer):
             "category",
             "media",
             "skus",
+            "videos",
         ]
+        
+    def get_videos(self, obj):
+        videos = [v for v in obj.videos.all() if v.is_active]
+        if videos:
+            return ProductVideoSerializer(videos, many=True).data
+        
+        request = self.context.get("request")
+        if request and hasattr(request, "boosting_videos"):
+            if request.boosting_videos is not None:
+                return ProductVideoSerializer(request.boosting_videos, many=True).data
+                
+        # Fallback if request is not populated with boosting_videos
+        boosting_videos = ProductVideo.objects.filter(is_boosting_video=True, is_active=True)
+        return ProductVideoSerializer(boosting_videos, many=True).data
 
 class CommodityRateSerializer(serializers.ModelSerializer):
     class Meta:

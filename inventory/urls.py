@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import CategoryListAPIView, ProductListAPIView, ProductDetailAPIView, CategoryProductListAPIView, ProductSearchAPIView, CurrentCommodityRatesAPIView
+from .views import CategoryListAPIView, ProductListAPIView, ProductDetailAPIView, CategoryProductListAPIView, ProductSearchAPIView, CurrentCommodityRatesAPIView, HomepageFeaturedVideoAPIView
 
 urlpatterns = [
     path("categories/", CategoryListAPIView.as_view(), name="category-list"),
@@ -12,4 +12,7 @@ urlpatterns = [
 
     # Commodity Rates (Frontend Widget)
     path("rates/current/", CurrentCommodityRatesAPIView.as_view(), name="current-rates"),
+    
+    # Homepage Featured Videos
+    path("videos/homepage-featured/", HomepageFeaturedVideoAPIView.as_view(), name="homepage-featured-videos"),
 ]
