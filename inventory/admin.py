@@ -131,10 +131,18 @@ class ProductMediaAdmin(admin.ModelAdmin):
             "fields": ("upload_images", "sort_order"),
             "description": (
                 "<div class='upload-help-text'>"
-                "📁 Drag &amp; drop images here or click to browse. "
+                "&#128193; Drag &amp; drop images here or click to browse. "
                 "You can select <strong>multiple files</strong> at once. "
-                "Supported: JPG, PNG, WEBP, GIF — max 10 MB each."
+                "Supported: JPG, PNG, WEBP, GIF &mdash; max 10 MB each."
                 "</div>"
+            ),
+        }),
+        ("Replace Existing Image", {
+            "fields": ("media_file",),
+            "classes": ("collapse",),
+            "description": (
+                "Only use this to <strong>replace</strong> the image on an existing record. "
+                "For new uploads, use the section above."
             ),
         }),
     )
@@ -163,96 +171,79 @@ class ProductMediaAdmin(admin.ModelAdmin):
 
     def save_model(self, request, obj, form, change):
         """
-        Handle multi-image upload.
+        Three scenarios:
 
-        Scenarios handled:
-        1. Multiple files selected → create one ProductMedia per file (batch).
-        2. Single file (or zero files) in the multi-input → fall through to
-           standard Django save (handles the change/edit case gracefully).
-        3. Per-file errors → show admin warning, skip that file, continue.
-        4. Full batch wrapped in transaction.atomic() so DB stays consistent.
+        A. ADD with upload_images files  → one ProductMedia row per file.
+           Each file is written to MEDIA_ROOT via ImageField.save() then the
+           DB row is committed. All wrapped in transaction.atomic().
+
+        B. ADD with no files (edge case) → standard single-record Django save.
+
+        C. CHANGE (edit existing record) → standard save; existing media_file
+           is preserved / replaced via the ClearableFileInput widget.
         """
         files = form.cleaned_data.get('upload_images', [])
 
         if not files:
-            # ── No new uploads — standard save (edit existing record) ──────
+            # Scenario B or C — no multi-upload; normal Django admin save
             super().save_model(request, obj, form, change)
             return
 
+        # Scenario A — batch multi-upload (add view)
         product = form.cleaned_data.get('product')
         sku = form.cleaned_data.get('sku')
         base_sort = form.cleaned_data.get('sort_order', 0) or 0
-
         saved_count = 0
-        failed_files = []
 
         try:
             with transaction.atomic():
                 for i, upload in enumerate(files):
-                    try:
-                        media_obj = ProductMedia(
-                            product=product,
-                            sku=sku,
-                            sort_order=base_sort + i,
-                            media={
-                                "type": "image",
-                                "role": "gallery",
-                                "original_name": upload.name,
-                            },
-                        )
-                        # Assign the file to the ImageField — Django storage
-                        # backend will handle the actual disk/S3 save on commit.
-                        media_obj.media_file.save(
-                            upload.name,
-                            upload,
-                            save=False   # don't trigger another .save() yet
-                        )
-                        media_obj.save()
-                        saved_count += 1
+                    media_obj = ProductMedia(
+                        product=product,
+                        sku=sku,
+                        sort_order=base_sort + i,
+                        media={
+                            "type": "image",
+                            "role": "gallery",
+                            "original_name": upload.name,
+                        },
+                    )
+                    # Step 1: write the file to MEDIA_ROOT/products/media/
+                    #         save=False → don't call media_obj.save() yet
+                    media_obj.media_file.save(upload.name, upload, save=False)
 
-                        logger.info(
-                            "ProductMedia created | product=%s sku=%s file=%s sort=%d",
-                            product.name,
-                            sku.sku_code if sku else "—",
-                            upload.name,
-                            base_sort + i,
-                        )
+                    # Step 2: commit the DB row (media_file path already set)
+                    media_obj.save()
+                    saved_count += 1
 
-                    except Exception as file_err:
-                        failed_files.append(upload.name)
-                        logger.error(
-                            "Failed to save ProductMedia for file '%s': %s",
-                            upload.name,
-                            str(file_err),
-                            exc_info=True,
-                        )
-                        # Re-raise so the atomic block rolls back everything
-                        raise
+                    logger.info(
+                        "ProductMedia created | product=%s sku=%s file=%s sort=%d",
+                        product.name,
+                        sku.sku_code if sku else "none",
+                        upload.name,
+                        base_sort + i,
+                    )
 
-        except Exception:
-            # Transaction rolled back — nothing was saved
+        except Exception as exc:
+            logger.error(
+                "Batch upload failed after %d file(s) — rolled back: %s",
+                saved_count, str(exc), exc_info=True,
+            )
             self.message_user(
                 request,
-                f"Upload failed. No images were saved. "
-                f"Failed file(s): {', '.join(failed_files)}. "
-                f"Check the server logs for details.",
+                f"Upload failed — no images were saved. Error: {exc}",
                 level=messages.ERROR,
             )
             return
 
-        # ── Success messages ─────────────────────────────────────────────────
-        if saved_count == 1:
-            self.message_user(
-                request,
-                f"✅ 1 image uploaded successfully for product «{product.name}».",
-                level=messages.SUCCESS,
-            )
-        else:
-            self.message_user(
-                request,
-                f"✅ {saved_count} images uploaded successfully for product «{product.name}».",
-                level=messages.SUCCESS,
-            )
+        noun = "image" if saved_count == 1 else "images"
+        self.message_user(
+            request,
+            f"\u2705 {saved_count} {noun} uploaded successfully for \u00ab{product.name}\u00bb.",
+            level=messages.SUCCESS,
+        )
+        # The batch save is complete — do NOT call super().save_model()
+        # because obj was never assigned a media_file and would create an empty row.
 
 
 # ============================================================

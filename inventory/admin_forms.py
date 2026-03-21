@@ -21,31 +21,35 @@ class MultipleImageField(forms.Field):
     """
     A form field that accepts multiple image files via a single <input type="file" multiple>.
 
-    Validation:
-    - Each file must be a valid image (checked via Pillow).
-    - Each file must be <= MAX_FILE_SIZE_BYTES.
-    - Empty list is allowed (field is optional) unless required=True.
+    Validation per file:
+    - Size  ≤ MAX_FILE_SIZE_BYTES (10 MB)
+    - MIME  in ALLOWED_IMAGE_TYPES
+    - Deep  Pillow Image.verify() — catches corrupt/spoofed files
     """
 
     def __init__(self, *args, **kwargs):
         kwargs.setdefault('required', False)
         kwargs.setdefault('label', _('Upload Images'))
         kwargs.setdefault('help_text', _(
-            'Select one or multiple image files (JPG, PNG, WEBP, GIF). '
-            'Max 10 MB each.'
+            'Select one or more image files (JPG, PNG, WEBP, GIF). Max 10 MB each.'
         ))
-        super().__init__(*args, widget=MultipleFileInput(attrs={'class': 'multi-image-upload-input'}), **kwargs)
+        # Pass widget as keyword arg to forms.Field.__init__
+        super().__init__(
+            *args,
+            widget=MultipleFileInput(attrs={'class': 'multi-image-upload-input'}),
+            **kwargs
+        )
 
     def to_python(self, data):
         """
-        data is a list of InMemoryUploadedFile (or similar) objects.
-        Returns the same list, or [] if nothing was uploaded.
+        data arrives as a list from MultipleFileInput.value_from_datadict().
+        Returns cleaned list, or [] if nothing was posted.
         """
         if not data:
             return []
         if not isinstance(data, (list, tuple)):
             data = [data]
-        return [f for f in data if f]
+        return [f for f in data if f]  # drop Falsy entries
 
     def validate(self, value):
         super().validate(value)
@@ -60,46 +64,39 @@ class MultipleImageField(forms.Field):
         errors = []
 
         for f in value:
-            # ── Size check ──────────────────────────────────────────────────
+            # ── Size guard ──────────────────────────────────────────────────
             if f.size > MAX_FILE_SIZE_BYTES:
-                errors.append(
-                    ValidationError(
-                        _('%(name)s is too large (%(size)s). Max allowed size is 10 MB.'),
-                        params={'name': f.name, 'size': f'{f.size / 1024 / 1024:.1f} MB'},
-                        code='file_too_large',
-                    )
-                )
+                errors.append(ValidationError(
+                    _('%(name)s is too large (%(size)s). Max allowed is 10 MB.'),
+                    params={'name': f.name, 'size': f'{f.size / 1024 / 1024:.1f} MB'},
+                    code='file_too_large',
+                ))
                 continue
 
-            # ── MIME type check (fast) ───────────────────────────────────────
+            # ── MIME guard (fast path) ───────────────────────────────────────
             content_type = getattr(f, 'content_type', '')
             if content_type and content_type not in ALLOWED_IMAGE_TYPES:
-                errors.append(
-                    ValidationError(
-                        _('%(name)s is not a supported image format. Allowed: JPG, PNG, WEBP, GIF.'),
-                        params={'name': f.name},
-                        code='invalid_image_type',
-                    )
-                )
+                errors.append(ValidationError(
+                    _('%(name)s is not a supported image type (JPG, PNG, WEBP, GIF).'),
+                    params={'name': f.name},
+                    code='invalid_image_type',
+                ))
                 continue
 
-            # ── Pillow deep validation ──────────────────────────────────────
+            # ── Pillow deep verify ──────────────────────────────────────────
             try:
                 from PIL import Image
-                # Read without consuming the file pointer
                 f.seek(0)
                 img = Image.open(io.BytesIO(f.read()))
-                img.verify()   # raises if file is corrupt
-                f.seek(0)      # reset so Django can stream it to storage
+                img.verify()   # raises on corrupt / truncated data
+                f.seek(0)      # reset pointer so storage backend can stream it
             except Exception:
-                errors.append(
-                    ValidationError(
-                        _('%(name)s could not be identified as a valid image. '
-                          'The file may be corrupt or in an unsupported format.'),
-                        params={'name': f.name},
-                        code='invalid_image',
-                    )
-                )
+                errors.append(ValidationError(
+                    _('%(name)s could not be read as a valid image. '
+                      'The file may be corrupt or in an unsupported format.'),
+                    params={'name': f.name},
+                    code='invalid_image',
+                ))
                 continue
 
             cleaned.append(f)
@@ -112,32 +109,72 @@ class MultipleImageField(forms.Field):
 
 class ProductMediaMultiUploadForm(forms.ModelForm):
     """
-    Admin form for ProductMedia.
-    Supports uploading multiple images in a single request.
-    The `upload_images` field is the multi-file picker.
-    The underlying `media_file` ImageField is hidden — it is populated
-    programmatically by ProductMediaAdmin.save_model() for each file.
+    Admin form for ProductMedia with multi-image upload support.
+
+    ── Fields ──────────────────────────────────────────────────────────────
+    product         ForeignKey  (required)
+    sku             ForeignKey  (optional)
+    sort_order      Integer     (default 0)
+    upload_images   Custom      Multi-file picker — creates N rows on save
+    media_file      ImageField  Hidden — used for direct single-file edits
+
+    ── Upload flow ──────────────────────────────────────────────────────────
+    When upload_images has files → ProductMediaAdmin.save_model() creates
+    one ProductMedia row per file (ignores the model-level media_file).
+
+    When upload_images is empty → normal ModelForm save (edit mode, preserves
+    the existing media_file on the record being changed).
     """
 
     upload_images = MultipleImageField()
 
     class Meta:
         model = ProductMedia
-        fields = ['product', 'sku', 'sort_order']
+        # Include media_file so existing records can be edited without re-upload
+        fields = ['product', 'sku', 'sort_order', 'media_file']
+        widgets = {
+            # Hide the single-file picker — it is only used as a fallback when
+            # editing an existing record. Users upload via upload_images instead.
+            'media_file': forms.FileInput(attrs={
+                'style': 'display:none',
+                'id': 'id_media_file_hidden',
+            }),
+        }
+        labels = {
+            'media_file': _('Replace existing image (optional)'),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # Make product required
+        # Product — required, only active products
         self.fields['product'].required = True
-        self.fields['product'].queryset = Product.objects.filter(is_active=True).order_by('name')
+        self.fields['product'].queryset = (
+            Product.objects.filter(is_active=True).order_by('name')
+        )
 
-        # SKU is optional — filter to skus of selected product if possible
+        # SKU — optional
         self.fields['sku'].required = False
-        self.fields['sku'].queryset = ProductSKU.objects.select_related('product').order_by('product__name', 'sku_code')
+        self.fields['sku'].queryset = (
+            ProductSKU.objects
+            .select_related('product')
+            .order_by('product__name', 'sku_code')
+        )
         self.fields['sku'].empty_label = '— No SKU (product-level image) —'
 
+        # Sort order
         self.fields['sort_order'].initial = 0
         self.fields['sort_order'].help_text = _(
-            'Images are ordered ascending. Multiple uploads start at this value and increment by 1.'
+            'Images are sorted ascending. Batch uploads start here and increment by 1.'
         )
+
+        # media_file — only show if editing an existing object that has one
+        obj = kwargs.get('instance')
+        if obj and obj.pk and obj.media_file:
+            self.fields['media_file'].widget = forms.ClearableFileInput()
+            self.fields['media_file'].required = False
+            self.fields['media_file'].label = _('Replace existing image (optional)')
+        else:
+            # Hide entirely when adding — upload_images handles it
+            self.fields['media_file'].required = False
+            self.fields['media_file'].widget.attrs['style'] = 'display:none'
