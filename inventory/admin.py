@@ -9,7 +9,7 @@ from .models import (
     ProductSKU, SKUAttributeOption,
     Commodity, CommodityVariant, CommodityRate, ProductVideo
 )
-from .admin_forms import ProductMediaMultiUploadForm
+from .admin_forms import ProductMediaMultiUploadForm, ProductCategoryForm
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +58,7 @@ class ProductAttributeAssignmentInline(admin.TabularInline):
 
 @admin.register(ProductCategory)
 class ProductCategoryAdmin(admin.ModelAdmin):
+    form = ProductCategoryForm
     list_display = ('name', 'slug', 'parent', 'is_active', 'created_at')
     list_filter = ('is_active',)
     search_fields = ('name', 'slug')

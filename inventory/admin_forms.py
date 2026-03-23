@@ -2,7 +2,7 @@ import io
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
-from .models import ProductMedia, Product, ProductSKU
+from .models import ProductMedia, Product, ProductSKU, ProductCategory
 from .widgets import MultipleFileInput
 
 # Max individual file size: 5 MB
@@ -172,3 +172,30 @@ class ProductMediaMultiUploadForm(forms.ModelForm):
             # Hide entirely when adding — upload_images handles it
             self.fields['media_file'].required = False
             self.fields['media_file'].widget.attrs['style'] = 'display:none'
+
+
+class ProductCategoryForm(forms.ModelForm):
+    """
+    Form for ProductCategory to enforce 5 MB image size and MIME type.
+    """
+    class Meta:
+        model = ProductCategory
+        fields = '__all__'
+
+    def clean_image(self):
+        image = self.cleaned_data.get('image')
+        if image:
+            # ── Size guard ──────────────────────────────────────────────────
+            if image.size > MAX_FILE_SIZE_BYTES:
+                raise ValidationError(
+                    _('%(name)s is too large (%(size)s). Max allowed is 5 MB.'),
+                    params={'name': image.name, 'size': f'{image.size / 1024 / 1024:.1f} MB'},
+                )
+            # ── MIME guard ──────────────────────────────────────────────────
+            content_type = getattr(image, 'content_type', '')
+            if content_type and content_type not in ALLOWED_IMAGE_TYPES:
+                raise ValidationError(
+                    _('%(name)s is not a supported image type (JPG, PNG, WEBP, GIF).'),
+                    params={'name': image.name},
+                )
+        return image
