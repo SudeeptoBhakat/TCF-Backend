@@ -5,8 +5,8 @@ from django.utils.translation import gettext_lazy as _
 from .models import ProductMedia, Product, ProductSKU
 from .widgets import MultipleFileInput
 
-# Max individual file size: 10 MB
-MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
+# Max individual file size: 5 MB
+MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024
 
 # Accepted MIME types
 ALLOWED_IMAGE_TYPES = {
@@ -31,7 +31,7 @@ class MultipleImageField(forms.Field):
         kwargs.setdefault('required', False)
         kwargs.setdefault('label', _('Upload Images'))
         kwargs.setdefault('help_text', _(
-            'Select one or more image files (JPG, PNG, WEBP, GIF). Max 10 MB each.'
+            'Select one or more image files (JPG, PNG, WEBP, GIF). Max 5 MB each.'
         ))
         # Pass widget as keyword arg to forms.Field.__init__
         super().__init__(
@@ -67,7 +67,7 @@ class MultipleImageField(forms.Field):
             # ── Size guard ──────────────────────────────────────────────────
             if f.size > MAX_FILE_SIZE_BYTES:
                 errors.append(ValidationError(
-                    _('%(name)s is too large (%(size)s). Max allowed is 10 MB.'),
+                    _('%(name)s is too large (%(size)s). Max allowed is 5 MB.'),
                     params={'name': f.name, 'size': f'{f.size / 1024 / 1024:.1f} MB'},
                     code='file_too_large',
                 ))
