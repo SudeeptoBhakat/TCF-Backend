@@ -249,7 +249,11 @@ class CommodityVariant(models.Model):
         unique_together = (("commodity", "code"),)
 
     def __str__(self):
-        return f"{self.commodity.name} - {self.name}"
+        try:
+            commodity_name = self.commodity.name if self.commodity else "No Commodity"
+        except Exception:
+            commodity_name = "No Commodity"
+        return f"{commodity_name} - {self.name}"
 
 
 class CommodityRate(models.Model):
@@ -411,7 +415,11 @@ class ProductSKU(TimestampedModel):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.sku_code} - {self.product.name}"
+        try:
+            product_name = self.product.name if self.product else "No Product"
+        except Exception:
+            product_name = "No Product"
+        return f"{self.sku_code} - {product_name}"
     
     def get_price_breakdown(self, rate=None):
         from decimal import Decimal, ROUND_HALF_UP

@@ -263,10 +263,32 @@ class ProductAttributeOptionAdmin(admin.ModelAdmin):
 @admin.register(ProductSKU)
 class ProductSKUAdmin(admin.ModelAdmin):
     list_display = (
-        'sku_code', 'product', 'commodity_variant',
+        'sku_code', 'safe_product', 'safe_variant',
         'price', 'discount_percent', 'packaging_charges', 'hallmark_charges', 'stock_qty',
         'sell_by_fixed_price', 'is_active'
     )
+
+    def safe_product(self, obj):
+        try:
+            return obj.product.name if obj.product else "—"
+        except Exception as e:
+            logger.error(f"Error accessing product for SKU {obj.sku_code} (ID: {obj.pk}): {e}")
+            return "—"
+    safe_product.short_description = "Product"
+    safe_product.admin_order_field = "product__name"
+
+    def safe_variant(self, obj):
+        try:
+            return obj.commodity_variant.name if obj.commodity_variant else "—"
+        except Exception as e:
+            logger.error(f"Error accessing variant for SKU {obj.sku_code} (ID: {obj.pk}): {e}")
+            return "—"
+    safe_variant.short_description = "Commodity Variant"
+    safe_variant.admin_order_field = "commodity_variant__name"
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related('product', 'commodity_variant', 'commodity_variant__commodity')
 
     search_fields = ('sku_code', 'product__name', 'barcode')
     list_filter = (
