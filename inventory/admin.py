@@ -349,9 +349,7 @@ class ProductSKUAdmin(admin.ModelAdmin):
     readonly_fields = ()
 
     class Media:
-        css = {
-            "all": ("admin/css/custom_admin.css",)
-        }
+        css = {}
 
 
 # ============================================================
