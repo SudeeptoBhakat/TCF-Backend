@@ -290,6 +290,19 @@ class ProductSKUAdmin(admin.ModelAdmin):
         qs = super().get_queryset(request)
         return qs.select_related('product', 'commodity_variant', 'commodity_variant__commodity')
 
+    def changelist_view(self, request, extra_context=None):
+        try:
+            return super().changelist_view(request, extra_context=extra_context)
+        except Exception as e:
+            import traceback
+            import sys
+            logger.error("========== CRITICAL ADMIN CRASH ==========")
+            logger.error(traceback.format_exc())
+            print("\n========== CRITICAL ADMIN CRASH ==========", file=sys.stderr)
+            print(traceback.format_exc(), file=sys.stderr)
+            print("==========================================\n", file=sys.stderr)
+            raise
+
     search_fields = ('sku_code', 'product__name', 'barcode')
     list_filter = (
         'is_active', 'is_featured', 'is_halmark',
