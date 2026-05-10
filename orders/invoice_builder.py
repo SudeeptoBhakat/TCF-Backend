@@ -9,10 +9,10 @@ from django.core.exceptions import ValidationError
 logger = logging.getLogger(__name__)
 
 COMPANY_NAME    = "The Cultural Feed"
-COMPANY_ADDRESS = "West Bengal, India"
+COMPANY_ADDRESS = "Kolkata, West Bengal, India"
 GSTIN           = "19ABCDE1234F1Z5"
 WEBSITE         = "www.theculturalfeed.com"
-PHONE           = "+91-XXXXXXXXXX"
+PHONE           = "+91 91266 93794"
 EMAIL           = "support@theculturalfeed.com"
 
 
