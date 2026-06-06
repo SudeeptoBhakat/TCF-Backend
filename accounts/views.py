@@ -34,6 +34,17 @@ from inventory.models import CommodityRate, ProductMedia, ProductSKU, SKUAttribu
 from django.db import transaction
 from rest_framework.decorators import action
 
+# ====================================================
+# Cookie Configuration Helper (dev/prod aware)
+# ====================================================
+def _cookie_kwargs():
+    """Return cookie settings that work on both HTTP (localhost) and HTTPS (production)."""
+    return {
+        "httponly": True,
+        "secure": not settings.DEBUG,
+        "samesite": "Lax" if settings.DEBUG else "None",
+    }
+
 google_client_id = settings.SOCIALACCOUNT_PROVIDERS['google']['APP'].get('client_id')
 providers = getattr(settings, "SOCIALACCOUNT_PROVIDERS", {})
 facebook_config = providers.get("facebook", {}).get("APP", {})
@@ -106,15 +117,12 @@ class GoogleLoginAPIView(APIView):
         response = Response(data, status=status.HTTP_200_OK)
 
         # Set refresh token as HttpOnly secure cookie
-        # Cookie configuration — adjust domain/secure for your environment
         cookie_max_age = 7 * 24 * 60 * 60  # 7 days in seconds (match SIMPLE_JWT REFRESH LIFETIME)
         response.set_cookie(
             key="refresh_token",
             value=refresh_token,
-            httponly=True,
-            secure=True,      # set True in production (HTTPS)
-            samesite="Lax",
             max_age=cookie_max_age,
+            **_cookie_kwargs(),
         )
 
         return response
@@ -254,10 +262,8 @@ class RefreshFromCookieAPIView(APIView):
             response.set_cookie(
                 key="refresh_token",
                 value=str(new_refresh),
-                httponly=True,
-                secure=True,
-                samesite="None",
                 max_age=cookie_max_age,
+                **_cookie_kwargs(),
             )
 
             logger.info("Refresh cookie updated successfully and returned to client.")
@@ -299,23 +305,24 @@ class LogoutAPIView(APIView):
         )
 
         # ❗ Delete cookies (must match login parameters exactly)
+        ck = _cookie_kwargs()
         res.delete_cookie(
             key="access_token",
             path="/",
-            samesite="None",
-            secure=True,
+            samesite=ck["samesite"],
+            secure=ck["secure"],
         )
         res.delete_cookie(
             key="refresh_token",
             path="/",
-            samesite="None",
-            secure=True,
+            samesite=ck["samesite"],
+            secure=ck["secure"],
         )
         res.delete_cookie(
             key="sessionid",
             path="/",
-            samesite="None",
-            secure=True,
+            samesite=ck["samesite"],
+            secure=ck["secure"],
         )
 
         return res
@@ -570,10 +577,8 @@ class FacebookLoginAPIView(APIView):
         response.set_cookie(
             key="refresh_token",
             value=refresh_token_jwt,
-            httponly=True,
-            secure=True,
-            samesite="Lax",
             max_age=cookie_max_age,
+            **_cookie_kwargs(),
         )
 
         return response
@@ -694,19 +699,15 @@ class RegisterVerifyOTPAPIView(APIView):
         res.set_cookie(
             key='access_token',
             value=access,
-            httponly=True,
-            secure=True,
-            samesite='None',
             max_age=60 * 15,
+            **_cookie_kwargs(),
         )
         
         res.set_cookie(
             key='refresh_token',
             value=refresh,
-            httponly=True,
-            secure=True,
-            samesite='None',
             max_age=60 * 60 * 24 * 7,
+            **_cookie_kwargs(),
         )
         return res
 
@@ -743,19 +744,15 @@ class LoginAPIView(APIView):
         res.set_cookie(
             key='access_token',
             value=access,
-            httponly=True,
-            secure=True,
-            samesite='None',
             max_age=60 * 15,
+            **_cookie_kwargs(),
         )
         
         res.set_cookie(
             key='refresh_token',
             value=refresh,
-            httponly=True,
-            secure=True,
-            samesite='None',
             max_age=60 * 60 * 24 * 7,
+            **_cookie_kwargs(),
         )        
         return res
 

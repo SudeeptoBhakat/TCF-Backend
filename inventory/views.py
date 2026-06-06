@@ -88,8 +88,6 @@ class ProductListAPIView(APIView):
         # ------------ FILTERS ------------
         category_filter = request.GET.get("category")
         is_bestseller = request.GET.get("bestseller")
-        diamond_filter = request.GET.get("diamond")
-        bracelet_filter = request.GET.get("bracelet")
 
         filters = Q(is_active=True, category__is_active=True)
 
@@ -97,17 +95,9 @@ class ProductListAPIView(APIView):
         if category_filter in ["men", "women", "kids"]:
             filters &= Q(category__slug=category_filter)
 
-        # Bestseller filter
+        # Bestseller filter (is_bestseller lives on ProductSKU, not Product)
         if is_bestseller in ["1", "true", "True"]:
-            filters &= Q(is_bestseller=True)
-
-        # Diamonds
-        if diamond_filter in ["1", "true", "True"]:
-            filters &= Q(tags__icontains="diamond")
-
-        # Bracelets
-        if bracelet_filter in ["1", "true", "True"]:
-            filters &= Q(tags__icontains="bracelet")
+            filters &= Q(skus__is_bestseller=True)
 
         # ------------ BASE QUERY ------------
         queryset = (

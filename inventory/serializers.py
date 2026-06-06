@@ -194,11 +194,8 @@ class CommodityRateSerializer(serializers.ModelSerializer):
             "unit_price",
             "cgst_percent",
             "sgst_percent",
-            "delivery_charges",
-            "packaging_charges",
             "ratti_multiplier",
             "wastage_percent",
-            "hallmark_charges",
             "effective_date",
             "source",
         ]

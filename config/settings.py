@@ -32,13 +32,14 @@ CORS_ALLOWED_ORIGINS = [
 
 CORS_ALLOW_CREDENTIALS = True
 
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
+# Security: only enforce HTTPS settings in production
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
 SECURE_SSL_REDIRECT = not DEBUG
 
-# Required for cross-site cookies
-SESSION_COOKIE_SAMESITE = "None"
-CSRF_COOKIE_SAMESITE = "None"
+# Cookie SameSite: use Lax for local dev (HTTP), None for production (HTTPS)
+SESSION_COOKIE_SAMESITE = "Lax" if DEBUG else "None"
+CSRF_COOKIE_SAMESITE = "Lax" if DEBUG else "None"
 
 # ==============================
 # APPLICATIONS
@@ -137,14 +138,26 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
-STORAGES = {
-    "default": {
-        "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
-    },
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-    },
-}
+# In development, use local filesystem for media
+# In production, use Cloudinary
+if DEBUG:
+    STORAGES = {
+        "default": {
+            "BACKEND": "django.core.files.storage.FileSystemStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
+else:
+    STORAGES = {
+        "default": {
+            "BACKEND": "cloudinary_storage.storage.MediaCloudinaryStorage",
+        },
+        "staticfiles": {
+            "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+        },
+    }
 
 # ==============================
 # CLOUDINARY
@@ -237,7 +250,6 @@ OTP_MAX_VERIFY_ATTEMPTS = 3
 RESET_TOKEN_TTL_SECONDS = 900  # 15 minutes
 
 
-from datetime import timedelta
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
@@ -246,22 +258,17 @@ SIMPLE_JWT = {
     "AUTH_HEADER_TYPES": ("Bearer",),
     "AUTH_COOKIE": None,  # Don't use cookies for access token
     "AUTH_COOKIE_REFRESH": "refresh_token",  # Use cookie for refresh token
-    "AUTH_COOKIE_SECURE": True,
+    "AUTH_COOKIE_SECURE": not DEBUG,
     "AUTH_COOKIE_HTTP_ONLY": True,
-    "AUTH_COOKIE_SAMESITE": "None",
+    "AUTH_COOKIE_SAMESITE": "Lax" if DEBUG else "None",
 }
 
-# The following origins are hardcoded from the incoming branch.
-# Consider moving these to the .env file instead.
-CORS_ALLOWED_ORIGINS += [
-    "https://frontend-rouge-ten-22.vercel.app",
-    "http://localhost:5173"
-]
-
-CSRF_TRUSTED_ORIGINS += [
-    "https://frontend-rouge-ten-22.vercel.app",
-    "http://localhost:5173"
-]
+# Hardcoded CORS/CSRF origins as fallback (env values are primary)
+for origin in ["https://frontend-rouge-ten-22.vercel.app", "http://localhost:5173", "http://127.0.0.1:5173"]:
+    if origin not in CORS_ALLOWED_ORIGINS:
+        CORS_ALLOWED_ORIGINS.append(origin)
+    if origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(origin)
 
 AUTH_PASSWORD_VALIDATORS = [
     {

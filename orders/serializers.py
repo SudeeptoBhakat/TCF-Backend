@@ -379,7 +379,6 @@ class OrderSerializer(serializers.ModelSerializer):
             discount = Decimal(str(pb.get("discount_amount", "0.00")))
 
             item_subtotal = final_price * qty
-            print(item_subtotal)
             # Decrement stock
             sku_obj.stock_qty = sku_obj.stock_qty - qty
             sku_obj.save(update_fields=["stock_qty", "updated_at"])

@@ -1,4 +1,4 @@
-from venv import logger
+import logging
 import requests
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
@@ -8,6 +8,8 @@ from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.core.cache import cache
 from rest_framework.decorators import api_view, permission_classes
+
+logger = logging.getLogger(__name__)
 
 from orders.invoice_builder import build_invoice_data, create_invoice_for_payment
 from .models import Invoice, Order
@@ -171,7 +173,7 @@ class OrderListCreateAPIView(APIView):
         return Response(serializer.data)
 
     def post(self, request):
-        print(request.data)
+
         serializer = OrderSerializer(data=request.data, context={"request": request})
         if serializer.is_valid():
             try:
@@ -205,13 +207,13 @@ class OrderDetailAPIView(APIView):
         """
         Soft delete: mark inactive and restore stock if order is cancellable.
         """
+        from .models import OrderItem, OrderStatus
         order = get_object_or_404(Order, pk=pk, user=request.user)
         # allow deletion only in pending/processing depending on your policy
         if order.status not in [OrderStatus.PENDING, OrderStatus.PROCESSING]:
             return Response({"error": "Cannot delete order in current status"}, status=status.HTTP_400_BAD_REQUEST)
 
         # restore stock & mark inactive
-        from .models import OrderItem, OrderStatus
         with transaction.atomic():
             for item in order.items.select_related("sku").all():
                 sku = item.sku
@@ -232,14 +234,16 @@ class OrderAdminUpdateStatusAPIView(APIView):
         Admin endpoint to change order status (e.g. mark as PAID, SHIPPED).
         Body: {"status": "paid"}
         """
+        from .models import OrderStatus
         order = get_object_or_404(Order, pk=pk)
         new_status = request.data.get("status")
-        if new_status not in [c[0] for c in Order.Status.field.choices] if hasattr(Order, "Status") else None:
-            # fallback - accept known constants
-            # You can validate more strictly here
-            pass
+        valid_statuses = [c[0] for c in OrderStatus.choices]
+        if new_status not in valid_statuses:
+            return Response(
+                {"error": f"Invalid status. Valid: {valid_statuses}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        # You can add additional business rules here
         order.status = new_status
         order.save(update_fields=["status", "updated_at"])
         return Response({"message": "Status updated", "status": order.status})

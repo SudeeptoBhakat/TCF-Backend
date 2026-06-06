@@ -99,7 +99,7 @@ class CartItemSerializer(serializers.ModelSerializer):
 
     def get_commodity_rate(self, obj):
         """Return the latest active commodity rate for the SKU's variant."""
-        variant = getattr(obj.sku, "variant", None)
+        variant = getattr(obj.sku, "commodity_variant", None)
         if not variant:
             return None
 
@@ -155,7 +155,7 @@ class WishlistSerializer(serializers.ModelSerializer):
 
 # Reviwes and Comment 
 class ProductReviewSerializer(serializers.ModelSerializer):
-    user_name = serializers.CharField(source="user.get_full_name", read_only=True)
+    user_name = serializers.CharField(source="user.full_name", read_only=True)
     user_id = serializers.UUIDField(source="user.id", read_only=True)
 
     class Meta:

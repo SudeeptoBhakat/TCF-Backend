@@ -1,4 +1,3 @@
-from datetime import timezone
 from decimal import Decimal
 import uuid
 from django.db import models
